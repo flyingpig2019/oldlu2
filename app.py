@@ -73,9 +73,27 @@ def landing():
     return render_template('landing.html', current_date=datetime.now().strftime('%Y-%m-%d'))
 
 def get_db():
-    conn = sqlite3.connect('monitor.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    db_path = 'monitor.db'
+    try:
+        # 如果数据库文件不存在，先初始化
+        if not os.path.exists(db_path):
+            init_db()
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except sqlite3.DatabaseError as e:
+        print(f"数据库访问错误: {str(e)}")
+        # 如果数据库文件损坏，删除并重新创建
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            init_db()
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            return conn
+    except Exception as e:
+        print(f"连接数据库时出错: {str(e)}")
+        raise
 
 def get_chinese_weekday(date_str):
     english_weekday = datetime.strptime(date_str, '%Y-%m-%d').strftime('%A')
@@ -744,6 +762,11 @@ def init_db():
     # 检查数据库文件是否存在
     db_path = 'monitor.db'
     try:
+        # 确保数据库目录存在且可写
+        db_dir = os.path.dirname(os.path.abspath(db_path))
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir)
+
         if os.path.exists(db_path):
             # 尝试连接现有数据库
             test_conn = sqlite3.connect(db_path)
@@ -788,6 +811,11 @@ def init_db():
             conn.close()
             print("数据库初始化成功")
 
+        # 验证数据库是否可用
+        test_conn = sqlite3.connect(db_path)
+        test_conn.execute('SELECT 1').fetchone()
+        test_conn.close()
+
     except sqlite3.DatabaseError as e:
         print(f"数据库错误: {str(e)}")
         # 如果数据库文件损坏，删除它并重新创建
@@ -798,6 +826,7 @@ def init_db():
             init_db()
     except Exception as e:
         print(f"初始化数据库时出错: {str(e)}")
+        raise
 
 # 在应用启动时初始化数据库
 init_db()
