@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 from datetime import datetime, timedelta
 import sqlite3
 import os
@@ -7,6 +7,13 @@ import logging
 from dotenv import load_dotenv
 from functools import wraps
 from calendar import monthcalendar
+from github_utils import push_db_updates
+import pandas as pd
+import matplotlib
+# 设置后端为 Agg，避免线程问题
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import io
 
 app = Flask(__name__)
 
@@ -91,7 +98,7 @@ def add_medicine_record():
                [date, day_of_week, medicine_taken, notes])
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/add_checkin_record', methods=['POST'])
@@ -132,7 +139,7 @@ def add_checkin_record():
     
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/add_blood_pressure', methods=['POST'])
@@ -208,7 +215,7 @@ def add_blood_pressure():
     
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/medicine_detail')
@@ -326,7 +333,7 @@ def edit_medicine(id):
                [medicine_taken, notes, id])
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('medicine_detail'))
 
 @app.route('/delete_medicine/<int:id>')
@@ -336,7 +343,7 @@ def delete_medicine(id):
     db.execute('DELETE FROM medicine_records WHERE id = ?', [id])
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('medicine_detail'))
 
 @app.route('/checkin_detail')
@@ -459,7 +466,7 @@ def edit_checkin(id):
                [checkin, checkout, notes, income, id])
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('checkin_detail'))
 
 @app.route('/delete_checkin/<int:id>')
@@ -469,7 +476,7 @@ def delete_checkin(id):
     db.execute('DELETE FROM checkin_records WHERE id = ?', [id])
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('checkin_detail'))
 
 @app.route('/blood_pressure_detail')
@@ -653,7 +660,7 @@ def edit_blood_pressure(id):
                 notes, today_average, risk, id])
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/delete_blood_pressure/<int:id>')
@@ -663,8 +670,135 @@ def delete_blood_pressure(id):
     db.execute('DELETE FROM bloodpressure_records WHERE id = ?', [id])
     db.commit()
     db.close()
-    push_to_github()
+    push_db_updates()
     return redirect(url_for('blood_pressure_detail'))
+
+@app.route('/blood_pressure_print')
+@login_required
+def blood_pressure_print():
+    return render_template('bloodpressureprint.html')
+
+@app.route('/download_blood_pressure_table')
+@login_required
+def download_blood_pressure_table():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    db = get_db()
+    records = db.execute('''
+        SELECT date, day_of_week, 
+               morning_high, morning_low, 
+               afternoon_high, afternoon_low,
+               today_average, risk, notes
+        FROM bloodpressure_records 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date
+    ''', [start_date, end_date]).fetchall()
+    db.close()
+    
+    # 创建DataFrame
+    df = pd.DataFrame(records, columns=[
+        '日期',
+        '星期',
+        '早间高压',
+        '早间低压',
+        '晚间高压',
+        '晚间低压',
+        '今日平均',
+        '风险等级',
+        '备注'
+    ])
+    
+    # 创建Excel文件
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # 设置列宽
+        df.to_excel(writer, sheet_name='血压记录', index=False)
+        worksheet = writer.sheets['血压记录']
+        worksheet.column_dimensions['A'].width = 12  # 日期
+        worksheet.column_dimensions['B'].width = 8   # 星期
+        worksheet.column_dimensions['C'].width = 10  # 早间高压
+        worksheet.column_dimensions['D'].width = 10  # 早间低压
+        worksheet.column_dimensions['E'].width = 10  # 晚间高压
+        worksheet.column_dimensions['F'].width = 10  # 晚间低压
+        worksheet.column_dimensions['G'].width = 15  # 今日平均
+        worksheet.column_dimensions['H'].width = 10  # 风险等级
+        worksheet.column_dimensions['I'].width = 30  # 备注
+    
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'血压记录_{start_date}至{end_date}.xlsx'
+    )
+
+@app.route('/download_blood_pressure_chart')
+@login_required
+def download_blood_pressure_chart():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    db = get_db()
+    records = db.execute('''
+        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
+        FROM bloodpressure_records 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date
+    ''', [start_date, end_date]).fetchall()
+    db.close()
+    
+    # 准备数据
+    dates = [r['date'] for r in records]
+    morning_high = [r['morning_high'] if r['morning_high'] else 0 for r in records]
+    morning_low = [r['morning_low'] if r['morning_low'] else 0 for r in records]
+    afternoon_high = [r['afternoon_high'] if r['afternoon_high'] else 0 for r in records]
+    afternoon_low = [r['afternoon_low'] if r['afternoon_low'] else 0 for r in records]
+    
+    # 清除之前的图表
+    plt.clf()
+    
+    # 创建图表
+    plt.figure(figsize=(15, 8))
+    
+    # 设置柱状图的位置
+    x = range(len(dates))
+    width = 0.2  # 柱子的宽度
+    
+    # 绘制四组柱状图
+    plt.bar([i - width*1.5 for i in x], morning_high, width, label='Morning High', color='lightcoral')
+    plt.bar([i - width/2 for i in x], morning_low, width, label='Morning Low', color='lightblue')
+    plt.bar([i + width/2 for i in x], afternoon_high, width, label='Evening High', color='red')
+    plt.bar([i + width*1.5 for i in x], afternoon_low, width, label='Evening Low', color='blue')
+    
+    plt.axhline(y=140, color='r', linestyle=':', label='High Pressure Warning')
+    plt.axhline(y=90, color='b', linestyle=':', label='Low Pressure Warning')
+    
+    # 设置x轴刻度和标签
+    plt.xticks(x, dates, rotation=45)
+    
+    plt.title('Blood Pressure Trend')
+    plt.xlabel('Date')
+    plt.ylabel('Blood Pressure (mmHg)')
+    plt.legend()
+    plt.grid(True)
+    
+    # 调整布局，确保标签不被切掉
+    plt.tight_layout()
+    
+    # 保存到内存
+    img_buf = io.BytesIO()
+    plt.savefig(img_buf, format='png', dpi=300)
+    img_buf.seek(0)
+    plt.close('all')  # 关闭所有图表，释放内存
+    
+    return send_file(
+        img_buf,
+        mimetype='image/png',
+        as_attachment=True,
+        download_name=f'血压趋势图_{start_date}至{end_date}.png'
+    )
 
 # 这里将继续添加其他路由...
 
@@ -730,33 +864,38 @@ def push_to_github():
             # 设置远程仓库
             subprocess.run(['git', 'remote', 'add', 'origin', remote_url])
             
-            # 创建 .gitignore
-            if not os.path.exists('.gitignore'):
-                with open('.gitignore', 'w') as f:
-                    f.write('.env\n')
-                    f.write('__pycache__/\n')
-                    f.write('*.pyc\n')
-                    f.write('github_sync.log\n')
+            # 拉取远程仓库的内容
+            subprocess.run(['git', 'fetch', 'origin'])
+            subprocess.run(['git', 'checkout', '-b', 'main', 'origin/main'])
         
         # 设置Git配置
         subprocess.run(['git', 'config', '--global', 'user.name', github_username])
         subprocess.run(['git', 'config', '--global', 'user.email', f'{github_username}@users.noreply.github.com'])
         
-        # 添加并提交更改
+        # 只添加monitor.db文件
         subprocess.run(['git', 'add', 'monitor.db'])
+        
+        # 检查是否有更改需要提交
+        status = subprocess.run(['git', 'status', '--porcelain', 'monitor.db'], 
+                              capture_output=True, text=True).stdout.strip()
+        
+        if not status:
+            print("数据库没有变化，无需更新")
+            return
+        
+        # 提交更改
         commit_message = f"Update database at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         result = subprocess.run(['git', 'commit', '-m', commit_message], capture_output=True, text=True)
         
         if result.returncode != 0:
-            if "nothing to commit" in result.stderr:
-                print("数据库没有变化，无需更新")
-                return
             print(f"错误: Git commit 失败 - {result.stderr}")
             return
         
+        # 先拉取最新的更改
+        subprocess.run(['git', 'pull', '--rebase', 'origin', 'main'])
+        
         # 推送到远程仓库
-        result = subprocess.run(['git', 'push', '--force', remote_url, 'HEAD:main'], 
-                              capture_output=True, text=True)
+        result = subprocess.run(['git', 'push', 'origin', 'main'], capture_output=True, text=True)
         
         if result.returncode != 0:
             print(f"错误: Git push 失败 - {result.stderr}")

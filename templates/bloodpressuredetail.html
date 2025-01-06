@@ -163,13 +163,13 @@
             <div class="container">
                 <div class="d-flex justify-content-between align-items-center">
                     <h1 class="h3 mb-0 text-gray-800">
-                        <i class="fas fa-heartbeat me-2"></i>血压记录
+                        <i class="fas fa-heartbeat me-2"></i>血压记录详情
                     </h1>
                     <div>
-                        <a href="{{ url_for('blood_pressure_chart') }}" class="btn btn-info">
-                            <i class="fas fa-chart-line me-2"></i>趋势图表
+                        <a href="{{ url_for('blood_pressure_print') }}" class="btn btn-success me-2">
+                            <i class="fas fa-download me-2"></i>下载打印
                         </a>
-                        <a href="{{ url_for('blood_pressure_average') }}" class="btn btn-success ms-2">
+                        <a href="{{ url_for('blood_pressure_average') }}" class="btn btn-info me-2">
                             <i class="fas fa-calculator me-2"></i>平均值
                         </a>
                         <a href="{{ url_for('landing') }}" class="btn btn-primary ms-2">
