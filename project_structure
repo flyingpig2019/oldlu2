@@ -1,0 +1,20 @@
+monitor_app/
+├── .env
+├── app.py
+├── monitor.db
+├── static/
+│   ├── css/
+│   │   └── style.css
+│   └── js/
+│       └── main.js
+└── templates/
+    ├── login.html
+    ├── landing.html
+    ├── medicinedetail.html
+    ├── medicinecalendardetail.html
+    ├── checkindetail.html
+    ├── checkincalendardetail.html
+    ├── incomedetail.html
+    ├── bloodpressuredetail.html
+    ├── bloodpressureaverage.html
+    └── bloodpressurechart.html 

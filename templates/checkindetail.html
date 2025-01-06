@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}签到记录详情 - 健康监测系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .action-buttons .btn {
+        padding: .25rem .5rem;
+        font-size: .875rem;
+        margin: 0 .25rem;
+    }
+    
+    .table-responsive {
+        border-radius: .35rem;
+        box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.15);
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 1rem;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fc;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 1rem;
+    }
+    
+    .badge {
+        padding: .5rem .75rem;
+        font-size: .875rem;
+        font-weight: 600;
+    }
+    
+    .badge-success {
+        background-color: var(--success-color);
+    }
+    
+    .badge-warning {
+        background-color: var(--warning-color);
+    }
+    
+    .badge-danger {
+        background-color: var(--danger-color);
+    }
+    
+    .modal-content {
+        border: none;
+        border-radius: .35rem;
+    }
+    
+    .modal-header {
+        background-color: var(--primary-color);
+        color: white;
+        border-top-left-radius: .35rem;
+        border-top-right-radius: .35rem;
+    }
+    
+    .stats-card {
+        transition: all .3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .border-left-primary {
+        border-left: .25rem solid var(--primary-color) !important;
+    }
+    
+    .border-left-success {
+        border-left: .25rem solid var(--success-color) !important;
+    }
+    
+    .border-left-info {
+        border-left: .25rem solid var(--info-color) !important;
+    }
+    
+    .income-amount {
+        font-weight: 700;
+        color: var(--success-color);
+    }
+    
+    /* 添加分页样式 */
+    .pagination {
+        margin: 0;
+    }
+    
+    .page-link {
+        color: var(--primary-color);
+        border: 1px solid #e3e6f0;
+        padding: .5rem .75rem;
+        margin: 0 .25rem;
+        border-radius: .35rem !important;
+    }
+    
+    .page-item.active .page-link {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+    }
+    
+    .page-item.disabled .page-link {
+        color: var(--secondary-color);
+        background-color: #f8f9fc;
+        border-color: #e3e6f0;
+    }
+    
+    .page-link:hover {
+        color: var(--primary-color);
+        background-color: #eaecf4;
+        border-color: #e3e6f0;
+    }
+    
+    .page-item.active .page-link:hover {
+        color: white;
+        background-color: var(--primary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="page-header">
+            <div class="container">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-clipboard-check me-2"></i>签到记录
+                    </h1>
+                    <div>
+                        <a href="{{ url_for('checkin_calendar') }}" class="btn btn-info">
+                            <i class="fas fa-calendar-alt me-2"></i>日历视图
+                        </a>
+                        <a href="{{ url_for('income_detail') }}" class="btn btn-success ms-2">
+                            <i class="fas fa-dollar-sign me-2"></i>收入统计
+                        </a>
+                        <a href="{{ url_for('landing') }}" class="btn btn-primary ms-2">
+                            <i class="fas fa-arrow-left me-2"></i>返回首页
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2 stats-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">总记录数</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ records|length }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2 stats-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">完整签到率</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {% set complete_count = records|selectattr('checkin')|selectattr('checkout')|list|length %}
+                            {{ "%.1f"|format(complete_count / records|length * 100 if records|length > 0 else 0) }}%
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2 stats-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">总收入</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            ¥{{ "%.2f"|format(records|sum(attribute='income')) }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 记录表格 -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">详细记录</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>星期</th>
+                        <th>签到状态</th>
+                        <th>签退状态</th>
+                        <th>收入</th>
+                        <th>备注</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td>{{ record.date }}</td>
+                        <td>{{ record.day_of_week }}</td>
+                        <td>
+                            {% if record.checkin %}
+                            <span class="badge badge-success">
+                                <i class="fas fa-check-circle me-1"></i>已签到
+                            </span>
+                            {% else %}
+                            <span class="badge badge-danger">
+                                <i class="fas fa-times-circle me-1"></i>未签到
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if record.checkout %}
+                            <span class="badge badge-success">
+                                <i class="fas fa-check-circle me-1"></i>已签退
+                            </span>
+                            {% else %}
+                            <span class="badge badge-danger">
+                                <i class="fas fa-times-circle me-1"></i>未签退
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="income-amount">¥{{ "%.2f"|format(record.income) }}</td>
+                        <td>{{ record.notes or '无' }}</td>
+                        <td class="action-buttons">
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ record.id }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <a href="{{ url_for('delete_checkin', id=record.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('确定要删除这条记录吗？')">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    
+                    <!-- 编辑模态框 -->
+                    <div class="modal fade" id="editModal{{ record.id }}" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">编辑记录</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form action="{{ url_for('edit_checkin', id=record.id) }}" method="POST">
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">日期</label>
+                                            <input type="text" class="form-control" value="{{ record.date }}" readonly>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input" name="checkin" id="checkin{{ record.id }}"
+                                                       {% if record.checkin %}checked{% endif %}>
+                                                <label class="form-check-label" for="checkin{{ record.id }}">已签到</label>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input" name="checkout" id="checkout{{ record.id }}"
+                                                       {% if record.checkout %}checked{% endif %}>
+                                                <label class="form-check-label" for="checkout{{ record.id }}">已签退</label>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">备注</label>
+                                            <textarea class="form-control" name="notes" rows="3">{{ record.notes }}</textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                        <button type="submit" class="btn btn-primary">保存更改</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 在表格后面添加分页控件 -->
+<div class="card-footer">
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center mb-0">
+            <!-- 上一页按钮 -->
+            <li class="page-item {{ 'disabled' if current_page == 1 }}">
+                <a class="page-link" href="{{ url_for('checkin_detail', page=current_page-1) if current_page > 1 else '#' }}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+            
+            <!-- 页码按钮 -->
+            {% for page in range(1, total_pages + 1) %}
+                {% if page == current_page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page }}</span>
+                    </li>
+                {% else %}
+                    <!-- 显示当前页附近的页码和首尾页 -->
+                    {% if page <= 2 or page >= total_pages - 1 or 
+                       (page >= current_page - 1 and page <= current_page + 1) %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('checkin_detail', page=page) }}">{{ page }}</a>
+                        </li>
+                    {% elif page == 3 or page == total_pages - 2 %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            
+            <!-- 下一页按钮 -->
+            <li class="page-item {{ 'disabled' if current_page == total_pages }}">
+                <a class="page-link" href="{{ url_for('checkin_detail', page=current_page+1) if current_page < total_pages else '#' }}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</div>
+{% endblock %} 
