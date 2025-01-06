@@ -10,7 +10,6 @@ from calendar import monthcalendar
 from github_utils import push_db_updates
 import xlsxwriter
 import io
-from flask import g
 
 app = Flask(__name__)
 
@@ -39,10 +38,6 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[logging.StreamHandler()]
 )
-
-logger = logging.getLogger(__name__)
-
-DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
 
 def login_required(f):
     @wraps(f)
@@ -78,16 +73,27 @@ def landing():
     return render_template('landing.html', current_date=datetime.now().strftime('%Y-%m-%d'))
 
 def get_db():
-    if 'db' not in g:
-        try:
-            logger.debug(f"Attempting to connect to database at: {DATABASE}")
-            logger.debug(f"Database file exists: {os.path.exists(DATABASE)}")
-            g.db = sqlite3.connect(DATABASE)
-            g.db.row_factory = sqlite3.Row
-        except sqlite3.Error as e:
-            logger.error(f"Database connection error: {e}")
-            raise
-    return g.db
+    db_path = 'monitor.db'
+    try:
+        # 如果数据库文件不存在，先初始化
+        if not os.path.exists(db_path):
+            init_db()
+        
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except sqlite3.DatabaseError as e:
+        print(f"数据库访问错误: {str(e)}")
+        # 如果数据库文件损坏，删除并重新创建
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            init_db()
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            return conn
+    except Exception as e:
+        print(f"连接数据库时出错: {str(e)}")
+        raise
 
 def get_chinese_weekday(date_str):
     english_weekday = datetime.strptime(date_str, '%Y-%m-%d').strftime('%A')
@@ -750,79 +756,143 @@ def download_blood_pressure_table():
 def download_blood_pressure_chart():
     return redirect(url_for('blood_pressure_detail'))  # 暂时移除图表功能
 
-@app.route('/debug/schema')
-def debug_schema():
-    try:
-        with app.open_resource('schema.sql', mode='r') as f:
-            return f"<pre>{f.read()}</pre>"
-    except Exception as e:
-        return f"Error reading schema: {str(e)}"
-
-@app.route('/debug/tables')
-def debug_tables():
-    try:
-        db = get_db()
-        tables = db.execute("SELECT name, sql FROM sqlite_master WHERE type='table'").fetchall()
-        result = []
-        for table in tables:
-            result.append(f"Table: {table[0]}\nSQL: {table[1]}\n")
-        return f"<pre>{''.join(result)}</pre>"
-    except Exception as e:
-        return f"Error getting tables: {str(e)}"
-
 # 这里将继续添加其他路由...
 
 def init_db():
-    db = get_db()
+    # 检查数据库文件是否存在
+    db_path = 'monitor.db'
     try:
-        # Drop existing tables if they exist
-        db.executescript('''
-            DROP TABLE IF EXISTS medicine_records;
-            DROP TABLE IF EXISTS checkin_records;
-            DROP TABLE IF EXISTS bloodpressure_records;
-        ''')
-        
-        # Create tables from schema
-        with app.open_resource('schema.sql', mode='r') as f:
-            schema_sql = f.read()
-            logger.debug(f"Executing schema SQL: {schema_sql}")  # Debug log
-            db.executescript(schema_sql)
+        # 确保数据库目录存在且可写
+        db_dir = os.path.dirname(os.path.abspath(db_path))
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir)
+
+        if os.path.exists(db_path):
+            # 尝试连接现有数据库
+            test_conn = sqlite3.connect(db_path)
+            test_conn.close()
+        else:
+            # 如果数据库不存在，创建新的
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
             
-        db.commit()
-        logger.info("Database initialized successfully")
-    except sqlite3.Error as e:
-        logger.error(f"Error initializing database: {e}")
-        db.rollback()  # Rollback on error
+            # 创建medicine_records表
+            c.execute('''CREATE TABLE IF NOT EXISTS medicine_records
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          date TEXT NOT NULL,
+                          day_of_week TEXT NOT NULL,
+                          medicine_taken BOOLEAN NOT NULL,
+                          notes TEXT)''')
+            
+            # 创建checkin_records表
+            c.execute('''CREATE TABLE IF NOT EXISTS checkin_records
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          date TEXT NOT NULL,
+                          day_of_week TEXT NOT NULL,
+                          checkin BOOLEAN NOT NULL,
+                          checkout BOOLEAN NOT NULL,
+                          notes TEXT,
+                          income DECIMAL(10,2))''')
+            
+            # 创建bloodpressure_records表
+            c.execute('''CREATE TABLE IF NOT EXISTS bloodpressure_records
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          date TEXT NOT NULL,
+                          day_of_week TEXT NOT NULL,
+                          morning_high INTEGER,
+                          morning_low INTEGER,
+                          afternoon_high INTEGER,
+                          afternoon_low INTEGER,
+                          notes TEXT,
+                          today_average TEXT,
+                          risk TEXT)''')
+            
+            conn.commit()
+            conn.close()
+            print("数据库初始化成功")
+
+        # 验证数据库是否可用
+        test_conn = sqlite3.connect(db_path)
+        test_conn.execute('SELECT 1').fetchone()
+        test_conn.close()
+
+    except sqlite3.DatabaseError as e:
+        print(f"数据库错误: {str(e)}")
+        # 如果数据库文件损坏，删除它并重新创建
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            print("删除损坏的数据库文件")
+            # 递归调用以重新创建数据库
+            init_db()
+    except Exception as e:
+        print(f"初始化数据库时出错: {str(e)}")
         raise
 
-def init_app(app):
-    # Force database reinitialization
-    if os.path.exists(DATABASE):
-        try:
-            os.remove(DATABASE)
-            logger.info(f"Removed existing database at {DATABASE}")
-        except OSError as e:
-            logger.error(f"Error removing database: {e}")
-    
-    with app.app_context():
-        try:
-            init_db()
-            # Verify tables were created
-            db = get_db()
-            tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            logger.info(f"Created tables: {[table[0] for table in tables]}")
-        except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
-            raise
+# 在应用启动时初始化数据库
+init_db()
 
-# Initialize the app (call this after all functions are defined)
-init_app(app)
+def push_to_github():
+    """推送更改到GitHub仓库"""
+    try:
+        # 获取环境变量
+        github_token = os.getenv('GITHUB_TOKEN')
+        github_username = os.getenv('GITHUB_USERNAME')
+        github_repo = os.getenv('GITHUB_REPO')
+        
+        print("\n=== 开始同步数据库到GitHub ===")
+        
+        # 构建远程仓库URL
+        remote_url = f'https://{github_token}@github.com/{github_username}/{github_repo}'
+        
+        # 检查是否是Git仓库，如果不是则初始化
+        if not os.path.exists('.git'):
+            print("初始化Git仓库...")
+            subprocess.run(['git', 'init'])
+            
+            # 设置远程仓库
+            subprocess.run(['git', 'remote', 'add', 'origin', remote_url])
+            
+            # 拉取远程仓库的内容
+            subprocess.run(['git', 'fetch', 'origin'])
+            subprocess.run(['git', 'checkout', '-b', 'main', 'origin/main'])
+        
+        # 设置Git配置
+        subprocess.run(['git', 'config', '--global', 'user.name', github_username])
+        subprocess.run(['git', 'config', '--global', 'user.email', f'{github_username}@users.noreply.github.com'])
+        
+        # 只添加monitor.db文件
+        subprocess.run(['git', 'add', 'monitor.db'])
+        
+        # 检查是否有更改需要提交
+        status = subprocess.run(['git', 'status', '--porcelain', 'monitor.db'], 
+                              capture_output=True, text=True).stdout.strip()
+        
+        if not status:
+            print("数据库没有变化，无需更新")
+            return
+        
+        # 提交更改
+        commit_message = f"Update database at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        result = subprocess.run(['git', 'commit', '-m', commit_message], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"错误: Git commit 失败 - {result.stderr}")
+            return
+        
+        # 先拉取最新的更改
+        subprocess.run(['git', 'pull', '--rebase', 'origin', 'main'])
+        
+        # 推送到远程仓库
+        result = subprocess.run(['git', 'push', 'origin', 'main'], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            print(f"错误: Git push 失败 - {result.stderr}")
+            return
+        
+        print("=== 数据库同步成功 ===\n")
+        
+    except Exception as e:
+        print(f"错误: 同步过程发生异常 - {str(e)}\n")
 
-@app.teardown_appcontext
-def close_db(error):
-    if hasattr(g, 'db'):
-        g.db.close()
-
-# After all route definitions, before app.run()
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000) 
