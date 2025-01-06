@@ -70,7 +70,28 @@ def logout():
 @app.route('/landing')
 @login_required
 def landing():
-    return render_template('landing.html', current_date=datetime.now().strftime('%Y-%m-%d'))
+    # 获取最近的血压记录
+    db = get_db()
+    last_bp = db.execute('''
+        SELECT morning_high, morning_low, afternoon_high, afternoon_low 
+        FROM bloodpressure_records 
+        ORDER BY date DESC LIMIT 1
+    ''').fetchone()
+
+    last_bp2 = db.execute('''
+        SELECT morning_high, morning_low, afternoon_high, afternoon_low 
+        FROM bloodpressure2_records 
+        ORDER BY date DESC LIMIT 1
+    ''').fetchone()
+
+    db.close()
+
+    return render_template('landing.html', 
+        current_date=datetime.now().strftime('%Y-%m-%d'),
+        last_bp=last_bp or {'morning_high': '', 'morning_low': '', 
+                           'afternoon_high': '', 'afternoon_low': ''},
+        last_bp2=last_bp2 or {'morning_high': '', 'morning_low': '', 
+                             'afternoon_high': '', 'afternoon_low': ''})
 
 def get_db():
     db_path = 'monitor.db'
@@ -95,10 +116,10 @@ def get_db():
             tables = conn.execute("""
                 SELECT name FROM sqlite_master 
                 WHERE type='table' AND 
-                name IN ('medicine_records', 'checkin_records', 'bloodpressure_records')
+                name IN ('medicine_records', 'checkin_records', 'bloodpressure_records', 'bloodpressure2_records')
             """).fetchall()
             
-            if len(tables) < 3:
+            if len(tables) < 4:
                 raise sqlite3.DatabaseError("数据库结构不完整")
                 
             return conn
@@ -594,68 +615,67 @@ def blood_pressure_average():
 @login_required
 def blood_pressure_chart():
     if request.method == 'POST':
-        start_date = request.form['start_date']
-        end_date = request.form['end_date']
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
         chart_type = request.form.get('chart_type', 'bar')
         
         db = get_db()
         records = db.execute('''
-            SELECT date, 
-                   COALESCE(morning_high, 0) as morning_high,
-                   COALESCE(afternoon_high, 0) as afternoon_high,
-                   COALESCE(morning_low, 0) as morning_low,
-                   COALESCE(afternoon_low, 0) as afternoon_low,
-                   risk
+            SELECT date, morning_high, morning_low, afternoon_high, afternoon_low, risk
             FROM bloodpressure_records 
             WHERE date BETWEEN ? AND ?
             ORDER BY date
         ''', [start_date, end_date]).fetchall()
         
-        dates = [record['date'] for record in records]
+        dates = []
         high_values = []
         low_values = []
         risk_data = {'good': 0, 'low_risk': 0, 'middle_risk': 0, 'high_risk': 0}
         
         for record in records:
-            # 计算高压和低压平均值
-            high_count = low_count = 0
-            high_sum = low_sum = 0
+            dates.append(record['date'])
             
-            if record['morning_high'] > 0:
+            # 计算当天的平均高压和低压
+            high_count = 0
+            high_sum = 0
+            low_count = 0
+            low_sum = 0
+            
+            if record['morning_high']:
                 high_sum += record['morning_high']
                 high_count += 1
-            if record['afternoon_high'] > 0:
+            if record['afternoon_high']:
                 high_sum += record['afternoon_high']
                 high_count += 1
-                
-            if record['morning_low'] > 0:
+            if record['morning_low']:
                 low_sum += record['morning_low']
                 low_count += 1
-            if record['afternoon_low'] > 0:
+            if record['afternoon_low']:
                 low_sum += record['afternoon_low']
                 low_count += 1
             
-            high_avg = high_sum / high_count if high_count > 0 else 0
-            low_avg = low_sum / low_count if low_count > 0 else 0
+            high_values.append(high_sum / high_count if high_count > 0 else 0)
+            low_values.append(low_sum / low_count if low_count > 0 else 0)
             
-            high_values.append(high_avg)
-            low_values.append(low_avg)
-            
-            # 统计风险等级
+            # 统计风险分布
             risk = record['risk']
-            if risk:
-                risk_key = risk.replace(' ', '_')
-                risk_data[risk_key] = risk_data.get(risk_key, 0) + 1
+            if risk == 'good':
+                risk_data['good'] += 1
+            elif risk == 'low risk':
+                risk_data['low_risk'] += 1
+            elif risk == 'middle risk':
+                risk_data['middle_risk'] += 1
+            elif risk == 'high risk':
+                risk_data['high_risk'] += 1
         
-        show_pie = (chart_type == 'pie')
+        db.close()
         
         return render_template('bloodpressurechart.html',
+                             show_chart=True,
                              dates=dates,
                              high_values=high_values,
                              low_values=low_values,
                              risk_data=risk_data,
-                             show_chart=True,
-                             show_pie=show_pie,
                              chart_type=chart_type)
     
     return render_template('bloodpressurechart.html', show_chart=False)
@@ -789,6 +809,348 @@ def download_blood_pressure_table():
 def download_blood_pressure_chart():
     return redirect(url_for('blood_pressure_detail'))  # 暂时移除图表功能
 
+@app.route('/add_blood_pressure2', methods=['POST'])
+@login_required
+def add_blood_pressure2():
+    date = request.form['date']
+    day_of_week = get_chinese_weekday(date)
+    notes = request.form.get('notes', '')
+    
+    def calculate_risk(high, low):
+        if not high or not low:
+            return None
+        if high > 140 or low > 90:
+            return 'high risk'
+        elif high > 130 or low > 85:
+            return 'middle risk'
+        elif high > 120 or low > 80:
+            return 'low risk'
+        else:
+            return 'good'
+    
+    if 'morning_submit' in request.form:
+        morning_high = request.form.get('morning_high', 0)
+        morning_low = request.form.get('morning_low', 0)
+        
+        db = get_db()
+        existing = db.execute('SELECT * FROM bloodpressure2_records WHERE date = ?', [date]).fetchone()
+        
+        risk = calculate_risk(int(morning_high), int(morning_low))
+        
+        if existing:
+            db.execute('''UPDATE bloodpressure2_records 
+                         SET morning_high = ?, morning_low = ?, notes = ?, risk = ?
+                         WHERE date = ?''', 
+                        [morning_high, morning_low, notes, risk, date])
+        else:
+            db.execute('''INSERT INTO bloodpressure2_records 
+                         (date, day_of_week, morning_high, morning_low, notes, risk)
+                         VALUES (?, ?, ?, ?, ?, ?)''',
+                        [date, day_of_week, morning_high, morning_low, notes, risk])
+        
+        db.commit()
+        db.close()
+        push_db_updates()
+    
+    elif 'afternoon_submit' in request.form:
+        afternoon_high = request.form.get('afternoon_high', 0)
+        afternoon_low = request.form.get('afternoon_low', 0)
+        
+        db = get_db()
+        existing = db.execute('SELECT * FROM bloodpressure2_records WHERE date = ?', [date]).fetchone()
+        
+        if existing:
+            db.execute('''UPDATE bloodpressure2_records 
+                         SET afternoon_high = ?, afternoon_low = ?, notes = ?
+                         WHERE date = ?''', 
+                        [afternoon_high, afternoon_low, notes, date])
+        else:
+            db.execute('''INSERT INTO bloodpressure2_records 
+                         (date, day_of_week, afternoon_high, afternoon_low, notes)
+                         VALUES (?, ?, ?, ?, ?)''',
+                        [date, day_of_week, afternoon_high, afternoon_low, notes])
+        
+        db.commit()
+        db.close()
+        push_db_updates()
+    
+    return redirect(url_for('landing'))
+
+@app.route('/blood_pressure2_detail')
+@login_required
+def blood_pressure2_detail():
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    
+    db = get_db()
+    total_records = db.execute('SELECT COUNT(*) as count FROM bloodpressure2_records').fetchone()['count']
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    offset = (page - 1) * per_page
+    records = db.execute('''
+        SELECT * FROM bloodpressure2_records 
+        ORDER BY date DESC LIMIT ? OFFSET ?
+    ''', [per_page, offset]).fetchall()
+    
+    db.close()
+    
+    return render_template('bloodpressure2detail.html', 
+                         records=records,
+                         current_page=page,
+                         total_pages=total_pages)
+
+@app.route('/blood_pressure2_average', methods=['GET', 'POST'])
+@login_required
+def blood_pressure2_average():
+    if request.method == 'POST':
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+        
+        db = get_db()
+        records = db.execute('''
+            SELECT morning_high, morning_low, afternoon_high, afternoon_low
+            FROM bloodpressure2_records 
+            WHERE date BETWEEN ? AND ?
+        ''', [start_date, end_date]).fetchall()
+        
+        total_high = 0
+        total_low = 0
+        count = 0
+        
+        for record in records:
+            if record['morning_high'] and record['morning_low']:
+                total_high += record['morning_high']
+                total_low += record['morning_low']
+                count += 1
+            if record['afternoon_high'] and record['afternoon_low']:
+                total_high += record['afternoon_high']
+                total_low += record['afternoon_low']
+                count += 1
+        
+        average_high = total_high / count if count > 0 else 0
+        average_low = total_low / count if count > 0 else 0
+        
+        db.close()
+        
+        return render_template('bloodpressure2average.html', 
+                             average_high=average_high,
+                             average_low=average_low)
+    
+    return render_template('bloodpressure2average.html', 
+                         average_high=0,
+                         average_low=0)
+
+@app.route('/blood_pressure2_chart', methods=['GET', 'POST'])
+@login_required
+def blood_pressure2_chart():
+    if request.method == 'POST':
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+        chart_type = request.form.get('chart_type', 'bar')
+        
+        db = get_db()
+        records = db.execute('''
+            SELECT date, morning_high, morning_low, afternoon_high, afternoon_low, risk
+            FROM bloodpressure2_records 
+            WHERE date BETWEEN ? AND ?
+            ORDER BY date
+        ''', [start_date, end_date]).fetchall()
+        
+        dates = []
+        high_values = []
+        low_values = []
+        risk_data = {'good': 0, 'low_risk': 0, 'middle_risk': 0, 'high_risk': 0}
+        
+        for record in records:
+            dates.append(record['date'])
+            
+            # 计算当天的平均高压和低压
+            high_count = 0
+            high_sum = 0
+            low_count = 0
+            low_sum = 0
+            
+            if record['morning_high']:
+                high_sum += record['morning_high']
+                high_count += 1
+            if record['afternoon_high']:
+                high_sum += record['afternoon_high']
+                high_count += 1
+            if record['morning_low']:
+                low_sum += record['morning_low']
+                low_count += 1
+            if record['afternoon_low']:
+                low_sum += record['afternoon_low']
+                low_count += 1
+            
+            high_values.append(high_sum / high_count if high_count > 0 else 0)
+            low_values.append(low_sum / low_count if low_count > 0 else 0)
+            
+            # 统计风险分布
+            risk = record['risk']
+            if risk == 'good':
+                risk_data['good'] += 1
+            elif risk == 'low risk':
+                risk_data['low_risk'] += 1
+            elif risk == 'middle risk':
+                risk_data['middle_risk'] += 1
+            elif risk == 'high risk':
+                risk_data['high_risk'] += 1
+        
+        db.close()
+        
+        return render_template('bloodpressure2chart.html',
+                             show_chart=True,
+                             dates=dates,
+                             high_values=high_values,
+                             low_values=low_values,
+                             risk_data=risk_data,
+                             chart_type=chart_type)
+    
+    return render_template('bloodpressure2chart.html', show_chart=False)
+
+@app.route('/delete_blood_pressure2/<int:id>')
+@login_required
+def delete_blood_pressure2(id):
+    db = get_db()
+    db.execute('DELETE FROM bloodpressure2_records WHERE id = ?', [id])
+    db.commit()
+    db.close()
+    push_db_updates()
+    return redirect(url_for('blood_pressure2_detail'))
+
+@app.route('/edit_blood_pressure2/<int:id>', methods=['POST'])
+@login_required
+def edit_blood_pressure2(id):
+    morning_high = request.form.get('morning_high', 0)
+    morning_low = request.form.get('morning_low', 0)
+    afternoon_high = request.form.get('afternoon_high', 0)
+    afternoon_low = request.form.get('afternoon_low', 0)
+    notes = request.form.get('notes', '')
+    
+    def calculate_risk(high, low):
+        if not high or not low:
+            return None
+        if high > 140 or low > 90:
+            return 'high risk'
+        elif high > 130 or low > 85:
+            return 'middle risk'
+        elif high > 120 or low > 80:
+            return 'low risk'
+        else:
+            return 'good'
+    
+    # 计算风险等级
+    morning_risk = calculate_risk(int(morning_high), int(morning_low)) if morning_high and morning_low else None
+    afternoon_risk = calculate_risk(int(afternoon_high), int(afternoon_low)) if afternoon_high and afternoon_low else None
+    
+    # 选择较高的风险等级
+    risk = None
+    if morning_risk and afternoon_risk:
+        risk_levels = {'good': 0, 'low risk': 1, 'middle risk': 2, 'high risk': 3}
+        risk = morning_risk if risk_levels.get(morning_risk, 0) > risk_levels.get(afternoon_risk, 0) else afternoon_risk
+    elif morning_risk:
+        risk = morning_risk
+    elif afternoon_risk:
+        risk = afternoon_risk
+    
+    # 计算今日平均值
+    values = []
+    if morning_high and morning_low:
+        values.extend([int(morning_high), int(morning_low)])
+    if afternoon_high and afternoon_low:
+        values.extend([int(afternoon_high), int(afternoon_low)])
+    today_average = f"{sum(values)/len(values):.1f}" if values else None
+    
+    db = get_db()
+    db.execute('''UPDATE bloodpressure2_records 
+                  SET morning_high = ?, morning_low = ?, 
+                      afternoon_high = ?, afternoon_low = ?,
+                      notes = ?, risk = ?, today_average = ?
+                  WHERE id = ?''',
+               [morning_high, morning_low, afternoon_high, afternoon_low,
+                notes, risk, today_average, id])
+    db.commit()
+    db.close()
+    push_db_updates()
+    
+    return redirect(url_for('blood_pressure2_detail'))
+
+@app.route('/blood_pressure2_print')
+@login_required
+def blood_pressure2_print():
+    # 获取当前月份的第一天和最后一天
+    today = datetime.now()
+    current_month = today.replace(day=1)
+    next_month = (current_month + timedelta(days=32)).replace(day=1)
+    
+    # 获取日历数据
+    cal = monthcalendar(today.year, today.month)
+    
+    return render_template('bloodpressure2print.html',
+                         calendar=cal,
+                         current_month=current_month,
+                         next_month=next_month)
+
+@app.route('/download_blood_pressure2_table')
+@login_required
+def download_blood_pressure2_table():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    db = get_db()
+    records = db.execute('''
+        SELECT date, day_of_week, 
+               morning_high, morning_low, 
+               afternoon_high, afternoon_low,
+               today_average, risk, notes
+        FROM bloodpressure2_records 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date
+    ''', [start_date, end_date]).fetchall()
+    db.close()
+    
+    # 创建Excel文件
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet('血压记录-毛')
+    
+    # 设置列宽
+    worksheet.set_column('A:A', 12)  # 日期
+    worksheet.set_column('B:B', 8)   # 星期
+    worksheet.set_column('C:F', 10)  # 血压值
+    worksheet.set_column('G:G', 15)  # 今日平均
+    worksheet.set_column('H:H', 10)  # 风险等级
+    worksheet.set_column('I:I', 30)  # 备注
+    
+    # 写入表头
+    headers = ['日期', '星期', '早间高压', '早间低压', '晚间高压', 
+              '晚间低压', '今日平均', '风险等级', '备注']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header)
+    
+    # 写入数据
+    for row, record in enumerate(records, 1):
+        worksheet.write(row, 0, record['date'])
+        worksheet.write(row, 1, record['day_of_week'])
+        worksheet.write(row, 2, record['morning_high'])
+        worksheet.write(row, 3, record['morning_low'])
+        worksheet.write(row, 4, record['afternoon_high'])
+        worksheet.write(row, 5, record['afternoon_low'])
+        worksheet.write(row, 6, record['today_average'])
+        worksheet.write(row, 7, record['risk'])
+        worksheet.write(row, 8, record['notes'])
+    
+    workbook.close()
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'血压记录-毛_{start_date}至{end_date}.xlsx'
+    )
+
 # 这里将继续添加其他路由...
 
 def init_db():
@@ -803,12 +1165,12 @@ def init_db():
                 tables = test_conn.execute("""
                     SELECT name FROM sqlite_master 
                     WHERE type='table' AND 
-                    name IN ('medicine_records', 'checkin_records', 'bloodpressure_records')
+                    name IN ('medicine_records', 'checkin_records', 'bloodpressure_records', 'bloodpressure2_records')
                 """).fetchall()
                 test_conn.close()
                 
                 # 如果所有表都存在，直接返回
-                if len(tables) == 3:
+                if len(tables) == 4:
                     print("数据库结构完整，无需初始化")
                     return
                 
@@ -854,11 +1216,24 @@ def init_db():
                       today_average TEXT,
                       risk TEXT)''')
         
+        # 创建bloodpressure2_records表（毛的血压记录）
+        c.execute('''CREATE TABLE IF NOT EXISTS bloodpressure2_records
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      date TEXT NOT NULL,
+                      day_of_week TEXT NOT NULL,
+                      morning_high INTEGER,
+                      morning_low INTEGER,
+                      afternoon_high INTEGER,
+                      afternoon_low INTEGER,
+                      notes TEXT,
+                      today_average TEXT,
+                      risk TEXT)''')
+        
         conn.commit()
         
         # 验证数据库是否正确创建
         c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
-        if c.fetchone()[0] < 3:
+        if c.fetchone()[0] < 4:
             raise Exception("数据库表创建失败")
         
         conn.close()

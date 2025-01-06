@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}血压趋势图表 - 健康监测系统{% endblock %}
+{% block title %}血压趋势图表-毛 - 健康监测系统{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -24,6 +24,45 @@
     .chart-container canvas {
         min-height: 300px;
     }
+    
+    .chart-title {
+        color: var(--primary-color);
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+    }
+    
+    .chart-type-select {
+        background-color: white;
+        border: 1px solid #e3e6f0;
+        border-radius: .35rem;
+        padding: .375rem 2rem .375rem 1rem;
+        font-size: .9rem;
+        color: #6e707e;
+        transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    }
+    
+    .chart-legend {
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin: 0 1rem;
+        font-size: 0.9rem;
+        color: var(--secondary-color);
+    }
+    
+    .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        margin-right: 0.5rem;
+    }
 </style>
 {% endblock %}
 
@@ -34,13 +73,13 @@
             <div class="container">
                 <div class="d-flex justify-content-between align-items-center">
                     <h1 class="h3 mb-0 text-gray-800">
-                        <i class="fas fa-chart-line me-2"></i>血压趋势图表
+                        <i class="fas fa-chart-line me-2"></i>血压趋势图表-毛
                     </h1>
                     <div>
-                        <a href="{{ url_for('blood_pressure_average') }}" class="btn btn-success">
+                        <a href="{{ url_for('blood_pressure2_average') }}" class="btn btn-success">
                             <i class="fas fa-calculator me-2"></i>平均值
                         </a>
-                        <a href="{{ url_for('blood_pressure_detail') }}" class="btn btn-primary ms-2">
+                        <a href="{{ url_for('blood_pressure2_detail') }}" class="btn btn-primary ms-2">
                             <i class="fas fa-arrow-left me-2"></i>返回详情
                         </a>
                     </div>
@@ -53,6 +92,9 @@
 <div class="row">
     <div class="col-12">
         <div class="chart-form">
+            <h5 class="chart-title mb-4">
+                <i class="fas fa-filter me-2"></i>数据筛选
+            </h5>
             <form method="POST" class="row g-3 align-items-end">
                 <div class="col-md-4">
                     <label class="form-label">开始日期</label>
@@ -64,7 +106,7 @@
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">图表类型</label>
-                    <select class="form-select" name="chart_type">
+                    <select class="form-select chart-type-select" name="chart_type" id="chartType">
                         <option value="bar">柱状图</option>
                         <option value="pie">风险分布</option>
                     </select>
@@ -81,6 +123,24 @@
         <div class="chart-container">
             {% if chart_type == 'bar' %}
             <canvas id="bloodPressureChart"></canvas>
+            <div class="chart-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #0000ff"></div>
+                    <span>正常高压</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ff0000"></div>
+                    <span>超标高压</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #00ff00"></div>
+                    <span>正常低压</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ffff00"></div>
+                    <span>超标低压</span>
+                </div>
+            </div>
             {% else %}
             <canvas id="riskPieChart"></canvas>
             {% endif %}
@@ -102,7 +162,6 @@
         const ctx = document.getElementById('bloodPressureChart').getContext('2d');
         const highValuesNormal = highValues.map(value => Math.min(value, 120));
         const highValuesExcess = highValues.map(value => value > 120 ? value - 120 : 0);
-        
         const lowValuesNormal = lowValues.map(value => Math.min(value, 80));
         const lowValuesExcess = lowValues.map(value => value > 80 ? value - 80 : 0);
         
@@ -114,28 +173,28 @@
                     {
                         label: '高压(正常)',
                         data: highValuesNormal,
-                        backgroundColor: '#4e73df',
+                        backgroundColor: '#0000ff',
                         borderWidth: 1,
                         stack: 'high'
                     },
                     {
                         label: '高压(超标)',
                         data: highValuesExcess,
-                        backgroundColor: '#e74a3b',
+                        backgroundColor: '#ff0000',
                         borderWidth: 1,
                         stack: 'high'
                     },
                     {
                         label: '低压(正常)',
                         data: lowValuesNormal,
-                        backgroundColor: '#1cc88a',
+                        backgroundColor: '#00ff00',
                         borderWidth: 1,
                         stack: 'low'
                     },
                     {
                         label: '低压(超标)',
                         data: lowValuesExcess,
-                        backgroundColor: '#8b5cf6',
+                        backgroundColor: '#ffff00',
                         borderWidth: 1,
                         stack: 'low'
                     }
@@ -150,13 +209,13 @@
                         beginAtZero: true,
                         grid: {
                             color: function(context) {
-                                if (context.tick.value === 80 || context.tick.value === 120) {
+                                if (context.tick.value === 120 || context.tick.value === 80) {
                                     return '#ff0000';
                                 }
                                 return '#e0e0e0';
                             },
                             lineWidth: function(context) {
-                                if (context.tick.value === 80 || context.tick.value === 120) {
+                                if (context.tick.value === 120 || context.tick.value === 80) {
                                     return 2;
                                 }
                                 return 1;
@@ -166,10 +225,7 @@
                 },
                 plugins: {
                     title: { display: false },
-                    legend: {
-                        display: true,
-                        position: 'bottom'
-                    }
+                    legend: { display: false }
                 }
             }
         });
@@ -200,7 +256,13 @@
                 responsive: true,
                 plugins: {
                     legend: {
-                        position: 'bottom'
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        }
                     }
                 }
             }

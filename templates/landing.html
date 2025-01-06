@@ -115,10 +115,12 @@
                     </div>
                     <div class="row mb-3">
                         <div class="col">
-                            <input type="number" class="form-control" name="morning_high" placeholder="早高压" value="0">
+                            <input type="number" class="form-control" name="morning_high" placeholder="早高压" 
+                                   value="{{ last_bp.morning_high }}">
                         </div>
                         <div class="col">
-                            <input type="number" class="form-control" name="morning_low" placeholder="早低压" value="0">
+                            <input type="number" class="form-control" name="morning_low" placeholder="早低压" 
+                                   value="{{ last_bp.morning_low }}">
                         </div>
                         <div class="col">
                             <button type="submit" name="morning_submit" class="btn btn-primary btn-sm w-100">
@@ -128,10 +130,12 @@
                     </div>
                     <div class="row mb-3">
                         <div class="col">
-                            <input type="number" class="form-control" name="afternoon_high" placeholder="晚高压" value="0">
+                            <input type="number" class="form-control" name="afternoon_high" placeholder="晚高压" 
+                                   value="{{ last_bp.afternoon_high }}">
                         </div>
                         <div class="col">
-                            <input type="number" class="form-control" name="afternoon_low" placeholder="晚低压" value="0">
+                            <input type="number" class="form-control" name="afternoon_low" placeholder="晚低压" 
+                                   value="{{ last_bp.afternoon_low }}">
                         </div>
                         <div class="col">
                             <button type="submit" name="afternoon_submit" class="btn btn-primary btn-sm w-100">
@@ -141,6 +145,58 @@
                     </div>
                     <div class="d-grid">
                         <a href="{{ url_for('blood_pressure_detail') }}" class="btn btn-info">
+                            <i class="fas fa-chart-line me-2"></i>查看详情
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 血压监测-毛 卡片 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h4><i class="fas fa-heartbeat me-2"></i>血压监测-毛</h4>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_blood_pressure2') }}" method="POST">
+                    <div class="form-group mb-3">
+                        <label class="form-label">日期</label>
+                        <input type="date" class="form-control" name="date" value="{{ current_date }}" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_high" placeholder="早高压" 
+                                   value="{{ last_bp2.morning_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_low" placeholder="早低压" 
+                                   value="{{ last_bp2.morning_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="morning_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-sun me-1"></i>提交早间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_high" placeholder="晚高压" 
+                                   value="{{ last_bp2.afternoon_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_low" placeholder="晚低压" 
+                                   value="{{ last_bp2.afternoon_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="afternoon_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-moon me-1"></i>提交晚间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <a href="{{ url_for('blood_pressure2_detail') }}" class="btn btn-info">
                             <i class="fas fa-chart-line me-2"></i>查看详情
                         </a>
                     </div>

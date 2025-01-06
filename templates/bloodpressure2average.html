@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}血压平均值统计-毛 - 健康监测系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="page-header">
+            <div class="container">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-calculator me-2"></i>血压平均值统计-毛
+                    </h1>
+                    <a href="{{ url_for('blood_pressure2_detail') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left me-2"></i>返回详情
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-calendar me-2"></i>选择日期范围
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label">开始日期</label>
+                        <input type="date" class="form-control" name="start_date" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">结束日期</label>
+                        <input type="date" class="form-control" name="end_date" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-calculator me-2"></i>计算
+                        </button>
+                    </div>
+                </form>
+                
+                {% if average_high != 0 or average_low != 0 %}
+                <div class="mt-4">
+                    <h5>平均血压值：</h5>
+                    {% set risk_class = '' %}
+                    {% if average_high > 140 or average_low > 85 %}
+                        {% set risk_class = 'text-danger' %}
+                    {% elif average_high > 130 or average_low > 80 %}
+                        {% set risk_class = 'text-warning' %}
+                    {% elif average_high > 120 or average_low > 80 %}
+                        {% set risk_class = 'text-info' %}
+                    {% else %}
+                        {% set risk_class = 'text-success' %}
+                    {% endif %}
+                    <p class="{{ risk_class }} h4">
+                        {{ "%.1f"|format(average_high) }}/{{ "%.1f"|format(average_low) }} mmHg
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
