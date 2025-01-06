@@ -741,42 +741,63 @@ def download_blood_pressure_chart():
 # 这里将继续添加其他路由...
 
 def init_db():
-    conn = sqlite3.connect('monitor.db')
-    c = conn.cursor()
-    
-    # 创建medicine_records表
-    c.execute('''CREATE TABLE IF NOT EXISTS medicine_records
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  date TEXT NOT NULL,
-                  day_of_week TEXT NOT NULL,
-                  medicine_taken BOOLEAN NOT NULL,
-                  notes TEXT)''')
-    
-    # 创建checkin_records表
-    c.execute('''CREATE TABLE IF NOT EXISTS checkin_records
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  date TEXT NOT NULL,
-                  day_of_week TEXT NOT NULL,
-                  checkin BOOLEAN NOT NULL,
-                  checkout BOOLEAN NOT NULL,
-                  notes TEXT,
-                  income DECIMAL(10,2))''')
-    
-    # 创建bloodpressure_records表
-    c.execute('''CREATE TABLE IF NOT EXISTS bloodpressure_records
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  date TEXT NOT NULL,
-                  day_of_week TEXT NOT NULL,
-                  morning_high INTEGER,
-                  morning_low INTEGER,
-                  afternoon_high INTEGER,
-                  afternoon_low INTEGER,
-                  notes TEXT,
-                  today_average TEXT,
-                  risk TEXT)''')
-    
-    conn.commit()
-    conn.close()
+    # 检查数据库文件是否存在
+    db_path = 'monitor.db'
+    try:
+        if os.path.exists(db_path):
+            # 尝试连接现有数据库
+            test_conn = sqlite3.connect(db_path)
+            test_conn.close()
+        else:
+            # 如果数据库不存在，创建新的
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            
+            # 创建medicine_records表
+            c.execute('''CREATE TABLE IF NOT EXISTS medicine_records
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          date TEXT NOT NULL,
+                          day_of_week TEXT NOT NULL,
+                          medicine_taken BOOLEAN NOT NULL,
+                          notes TEXT)''')
+            
+            # 创建checkin_records表
+            c.execute('''CREATE TABLE IF NOT EXISTS checkin_records
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          date TEXT NOT NULL,
+                          day_of_week TEXT NOT NULL,
+                          checkin BOOLEAN NOT NULL,
+                          checkout BOOLEAN NOT NULL,
+                          notes TEXT,
+                          income DECIMAL(10,2))''')
+            
+            # 创建bloodpressure_records表
+            c.execute('''CREATE TABLE IF NOT EXISTS bloodpressure_records
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          date TEXT NOT NULL,
+                          day_of_week TEXT NOT NULL,
+                          morning_high INTEGER,
+                          morning_low INTEGER,
+                          afternoon_high INTEGER,
+                          afternoon_low INTEGER,
+                          notes TEXT,
+                          today_average TEXT,
+                          risk TEXT)''')
+            
+            conn.commit()
+            conn.close()
+            print("数据库初始化成功")
+
+    except sqlite3.DatabaseError as e:
+        print(f"数据库错误: {str(e)}")
+        # 如果数据库文件损坏，删除它并重新创建
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            print("删除损坏的数据库文件")
+            # 递归调用以重新创建数据库
+            init_db()
+    except Exception as e:
+        print(f"初始化数据库时出错: {str(e)}")
 
 # 在应用启动时初始化数据库
 init_db()
