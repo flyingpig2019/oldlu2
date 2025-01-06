@@ -75,22 +75,55 @@ def landing():
 def get_db():
     db_path = 'monitor.db'
     try:
-        # 如果数据库文件不存在，先初始化
-        if not os.path.exists(db_path):
+        # 确保数据库目录存在且有正确的权限
+        db_dir = os.path.dirname(os.path.abspath(db_path))
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir, mode=0o755)
+
+        # 如果数据库文件不存在或大小为0，重新初始化
+        if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
+            print("数据库文件不存在或为空，正在初始化...")
             init_db()
-        
-        conn = sqlite3.connect(db_path)
+
+        # 尝试连接数据库
+        conn = sqlite3.connect(db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        return conn
-    except sqlite3.DatabaseError as e:
-        print(f"数据库访问错误: {str(e)}")
-        # 如果数据库文件损坏，删除并重新创建
-        if os.path.exists(db_path):
+
+        # 验证数据库结构
+        try:
+            # 检查所有必需的表是否存在
+            tables = conn.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND 
+                name IN ('medicine_records', 'checkin_records', 'bloodpressure_records')
+            """).fetchall()
+            
+            if len(tables) < 3:
+                raise sqlite3.DatabaseError("数据库结构不完整")
+                
+            return conn
+        except sqlite3.DatabaseError:
+            conn.close()
+            print("数据库结构无效，重新初始化...")
             os.remove(db_path)
             init_db()
-            conn = sqlite3.connect(db_path)
+            conn = sqlite3.connect(db_path, check_same_thread=False)
             conn.row_factory = sqlite3.Row
             return conn
+
+    except sqlite3.DatabaseError as e:
+        print(f"数据库访问错误: {str(e)}")
+        try:
+            # 尝试删除并重新创建数据库
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            init_db()
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            return conn
+        except Exception as inner_e:
+            print(f"重建数据库失败: {str(inner_e)}")
+            raise
     except Exception as e:
         print(f"连接数据库时出错: {str(e)}")
         raise
@@ -759,71 +792,81 @@ def download_blood_pressure_chart():
 # 这里将继续添加其他路由...
 
 def init_db():
-    # 检查数据库文件是否存在
     db_path = 'monitor.db'
+    
     try:
-        # 确保数据库目录存在且可写
-        db_dir = os.path.dirname(os.path.abspath(db_path))
-        if not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-
+        # 如果数据库文件已存在，尝试验证其结构
         if os.path.exists(db_path):
-            # 尝试连接现有数据库
-            test_conn = sqlite3.connect(db_path)
-            test_conn.close()
-        else:
-            # 如果数据库不存在，创建新的
-            conn = sqlite3.connect(db_path)
-            c = conn.cursor()
-            
-            # 创建medicine_records表
-            c.execute('''CREATE TABLE IF NOT EXISTS medicine_records
-                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                          date TEXT NOT NULL,
-                          day_of_week TEXT NOT NULL,
-                          medicine_taken BOOLEAN NOT NULL,
-                          notes TEXT)''')
-            
-            # 创建checkin_records表
-            c.execute('''CREATE TABLE IF NOT EXISTS checkin_records
-                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                          date TEXT NOT NULL,
-                          day_of_week TEXT NOT NULL,
-                          checkin BOOLEAN NOT NULL,
-                          checkout BOOLEAN NOT NULL,
-                          notes TEXT,
-                          income DECIMAL(10,2))''')
-            
-            # 创建bloodpressure_records表
-            c.execute('''CREATE TABLE IF NOT EXISTS bloodpressure_records
-                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                          date TEXT NOT NULL,
-                          day_of_week TEXT NOT NULL,
-                          morning_high INTEGER,
-                          morning_low INTEGER,
-                          afternoon_high INTEGER,
-                          afternoon_low INTEGER,
-                          notes TEXT,
-                          today_average TEXT,
-                          risk TEXT)''')
-            
-            conn.commit()
-            conn.close()
-            print("数据库初始化成功")
-
-        # 验证数据库是否可用
-        test_conn = sqlite3.connect(db_path)
-        test_conn.execute('SELECT 1').fetchone()
-        test_conn.close()
-
-    except sqlite3.DatabaseError as e:
-        print(f"数据库错误: {str(e)}")
-        # 如果数据库文件损坏，删除它并重新创建
-        if os.path.exists(db_path):
-            os.remove(db_path)
-            print("删除损坏的数据库文件")
-            # 递归调用以重新创建数据库
-            init_db()
+            try:
+                # 检查表是否存在
+                test_conn = sqlite3.connect(db_path)
+                tables = test_conn.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND 
+                    name IN ('medicine_records', 'checkin_records', 'bloodpressure_records')
+                """).fetchall()
+                test_conn.close()
+                
+                # 如果所有表都存在，直接返回
+                if len(tables) == 3:
+                    print("数据库结构完整，无需初始化")
+                    return
+                
+            except Exception as e:
+                print(f"验证数据库结构时出错: {str(e)}")
+                 # 如果无法删除，使用唯一的文件名
+                db_path = f'monitor_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
+      
+        # 只有在数据库不存在或结构不完整时才创建新数据库
+        print("创建新数据库...")
+        # 创建新的数据库
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+      
+        # 创建medicine_records表
+        c.execute('''CREATE TABLE IF NOT EXISTS medicine_records
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      date TEXT NOT NULL,
+                      day_of_week TEXT NOT NULL,
+                      medicine_taken BOOLEAN NOT NULL,
+                      notes TEXT)''')
+        
+        # 创建checkin_records表
+        c.execute('''CREATE TABLE IF NOT EXISTS checkin_records
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      date TEXT NOT NULL,
+                      day_of_week TEXT NOT NULL,
+                      checkin BOOLEAN NOT NULL,
+                      checkout BOOLEAN NOT NULL,
+                      notes TEXT,
+                      income DECIMAL(10,2))''')
+        
+        # 创建bloodpressure_records表
+        c.execute('''CREATE TABLE IF NOT EXISTS bloodpressure_records
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      date TEXT NOT NULL,
+                      day_of_week TEXT NOT NULL,
+                      morning_high INTEGER,
+                      morning_low INTEGER,
+                      afternoon_high INTEGER,
+                      afternoon_low INTEGER,
+                      notes TEXT,
+                      today_average TEXT,
+                      risk TEXT)''')
+        
+        conn.commit()
+        
+        # 验证数据库是否正确创建
+        c.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
+        if c.fetchone()[0] < 3:
+            raise Exception("数据库表创建失败")
+        
+        conn.close()
+        print("数据库初始化成功")
+        
+        # 设置适当的文件权限
+        os.chmod(db_path, 0o644)
+        
     except Exception as e:
         print(f"初始化数据库时出错: {str(e)}")
         raise
