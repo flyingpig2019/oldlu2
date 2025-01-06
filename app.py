@@ -8,11 +8,7 @@ from dotenv import load_dotenv
 from functools import wraps
 from calendar import monthcalendar
 from github_utils import push_db_updates
-import pandas as pd
-import matplotlib
-# 设置后端为 Agg，避免线程问题
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+import xlsxwriter
 import io
 
 app = Flask(__name__)
@@ -696,35 +692,38 @@ def download_blood_pressure_table():
     ''', [start_date, end_date]).fetchall()
     db.close()
     
-    # 创建DataFrame
-    df = pd.DataFrame(records, columns=[
-        '日期',
-        '星期',
-        '早间高压',
-        '早间低压',
-        '晚间高压',
-        '晚间低压',
-        '今日平均',
-        '风险等级',
-        '备注'
-    ])
-    
     # 创建Excel文件
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # 设置列宽
-        df.to_excel(writer, sheet_name='血压记录', index=False)
-        worksheet = writer.sheets['血压记录']
-        worksheet.column_dimensions['A'].width = 12  # 日期
-        worksheet.column_dimensions['B'].width = 8   # 星期
-        worksheet.column_dimensions['C'].width = 10  # 早间高压
-        worksheet.column_dimensions['D'].width = 10  # 早间低压
-        worksheet.column_dimensions['E'].width = 10  # 晚间高压
-        worksheet.column_dimensions['F'].width = 10  # 晚间低压
-        worksheet.column_dimensions['G'].width = 15  # 今日平均
-        worksheet.column_dimensions['H'].width = 10  # 风险等级
-        worksheet.column_dimensions['I'].width = 30  # 备注
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet('血压记录')
     
+    # 设置列宽
+    worksheet.set_column('A:A', 12)  # 日期
+    worksheet.set_column('B:B', 8)   # 星期
+    worksheet.set_column('C:F', 10)  # 血压值
+    worksheet.set_column('G:G', 15)  # 今日平均
+    worksheet.set_column('H:H', 10)  # 风险等级
+    worksheet.set_column('I:I', 30)  # 备注
+    
+    # 写入表头
+    headers = ['日期', '星期', '早间高压', '早间低压', '晚间高压', 
+              '晚间低压', '今日平均', '风险等级', '备注']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header)
+    
+    # 写入数据
+    for row, record in enumerate(records, 1):
+        worksheet.write(row, 0, record['date'])
+        worksheet.write(row, 1, record['day_of_week'])
+        worksheet.write(row, 2, record['morning_high'])
+        worksheet.write(row, 3, record['morning_low'])
+        worksheet.write(row, 4, record['afternoon_high'])
+        worksheet.write(row, 5, record['afternoon_low'])
+        worksheet.write(row, 6, record['today_average'])
+        worksheet.write(row, 7, record['risk'])
+        worksheet.write(row, 8, record['notes'])
+    
+    workbook.close()
     output.seek(0)
     
     return send_file(
@@ -737,68 +736,7 @@ def download_blood_pressure_table():
 @app.route('/download_blood_pressure_chart')
 @login_required
 def download_blood_pressure_chart():
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    
-    db = get_db()
-    records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
-        FROM bloodpressure_records 
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date
-    ''', [start_date, end_date]).fetchall()
-    db.close()
-    
-    # 准备数据
-    dates = [r['date'] for r in records]
-    morning_high = [r['morning_high'] if r['morning_high'] else 0 for r in records]
-    morning_low = [r['morning_low'] if r['morning_low'] else 0 for r in records]
-    afternoon_high = [r['afternoon_high'] if r['afternoon_high'] else 0 for r in records]
-    afternoon_low = [r['afternoon_low'] if r['afternoon_low'] else 0 for r in records]
-    
-    # 清除之前的图表
-    plt.clf()
-    
-    # 创建图表
-    plt.figure(figsize=(15, 8))
-    
-    # 设置柱状图的位置
-    x = range(len(dates))
-    width = 0.2  # 柱子的宽度
-    
-    # 绘制四组柱状图
-    plt.bar([i - width*1.5 for i in x], morning_high, width, label='Morning High', color='lightcoral')
-    plt.bar([i - width/2 for i in x], morning_low, width, label='Morning Low', color='lightblue')
-    plt.bar([i + width/2 for i in x], afternoon_high, width, label='Evening High', color='red')
-    plt.bar([i + width*1.5 for i in x], afternoon_low, width, label='Evening Low', color='blue')
-    
-    plt.axhline(y=140, color='r', linestyle=':', label='High Pressure Warning')
-    plt.axhline(y=90, color='b', linestyle=':', label='Low Pressure Warning')
-    
-    # 设置x轴刻度和标签
-    plt.xticks(x, dates, rotation=45)
-    
-    plt.title('Blood Pressure Trend')
-    plt.xlabel('Date')
-    plt.ylabel('Blood Pressure (mmHg)')
-    plt.legend()
-    plt.grid(True)
-    
-    # 调整布局，确保标签不被切掉
-    plt.tight_layout()
-    
-    # 保存到内存
-    img_buf = io.BytesIO()
-    plt.savefig(img_buf, format='png', dpi=300)
-    img_buf.seek(0)
-    plt.close('all')  # 关闭所有图表，释放内存
-    
-    return send_file(
-        img_buf,
-        mimetype='image/png',
-        as_attachment=True,
-        download_name=f'血压趋势图_{start_date}至{end_date}.png'
-    )
+    return redirect(url_for('blood_pressure_detail'))  # 暂时移除图表功能
 
 # 这里将继续添加其他路由...
 
