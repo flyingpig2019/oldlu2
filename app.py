@@ -866,4 +866,4 @@ def push_to_github():
         print(f"错误: 同步过程发生异常 - {str(e)}\n")
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True, host='0.0.0.0', port=5000) 
