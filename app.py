@@ -7,7 +7,7 @@ import logging
 from dotenv import load_dotenv
 from functools import wraps
 from calendar import monthcalendar
-from github_utils import pull_db_from_github
+from github_utils import pull_db_from_github, push_db_updates
 import xlsxwriter
 import io
 
@@ -285,6 +285,7 @@ def add_medicine_record():
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/medicine_detail')
@@ -322,6 +323,7 @@ def edit_medicine_record(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('medicine_detail'))
 
 @app.route('/delete_medicine_record/<int:id>')
@@ -332,6 +334,7 @@ def delete_medicine_record(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('medicine_detail'))
 
 @app.route('/add_checkin_record', methods=['POST'])
@@ -367,6 +370,7 @@ def add_checkin_record():
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/checkin_detail')
@@ -410,6 +414,7 @@ def edit_checkin_record(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('checkin_detail'))
 
 @app.route('/delete_checkin_record/<int:id>')
@@ -420,6 +425,7 @@ def delete_checkin_record(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('checkin_detail'))
 
 @app.route('/checkin_calendar')
@@ -557,6 +563,7 @@ def add_blood_pressure():
         db.commit()
         db.close()
     
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/blood_pressure_detail')
@@ -616,6 +623,7 @@ def edit_blood_pressure(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/delete_blood_pressure/<int:id>')
@@ -626,6 +634,7 @@ def delete_blood_pressure(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/add_blood_pressure2', methods=['POST'])
@@ -691,6 +700,7 @@ def add_blood_pressure2():
         db.commit()
         db.close()
     
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/add_blood_pressure3', methods=['POST'])
@@ -774,6 +784,7 @@ def add_blood_pressure3():
         db.commit()
         db.close()
     
+    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/blood_pressure2_detail')
@@ -850,6 +861,7 @@ def edit_blood_pressure2(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('blood_pressure2_detail'))
 
 @app.route('/delete_blood_pressure2/<int:id>')
@@ -860,6 +872,7 @@ def delete_blood_pressure2(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('blood_pressure2_detail'))
 
 @app.route('/blood_pressure3_detail')
@@ -928,6 +941,7 @@ def edit_blood_pressure3(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('blood_pressure3_detail'))
 
 @app.route('/delete_blood_pressure3/<int:id>')
@@ -938,6 +952,7 @@ def delete_blood_pressure3(id):
     db.commit()
     db.close()
     
+    push_db_updates()
     return redirect(url_for('blood_pressure3_detail'))
 
 @app.route('/medicine_calendar')

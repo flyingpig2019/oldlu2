@@ -146,3 +146,77 @@ def pull_db_from_github():
         error_msg = f"同步过程发生异常: {str(e)}"
         print(f"错误: {error_msg}")
         return False, error_msg 
+
+def push_db_updates():
+    """推送数据库更新到 GitHub，只保留最新版本"""
+    try:
+        # 获取环境变量
+        token = os.getenv('GITHUB_TOKEN')
+        repo_name = os.getenv('GITHUB_REPO')
+        username = os.getenv('GITHUB_USERNAME')
+
+        if not all([token, repo_name, username]):
+            error_msg = "环境变量未正确设置 (GITHUB_TOKEN, GITHUB_REPO, GITHUB_USERNAME)"
+            print(error_msg)
+            return False, error_msg
+
+        print("\n=== 开始推送数据库到GitHub ===")
+
+        # 连接到GitHub
+        g = Github(token)
+        repo = g.get_user(username).get_repo(repo_name)
+
+        try:
+            # 读取当前数据库文件
+            with open('monitor.db', 'rb') as f:
+                content = f.read()
+                content_b64 = base64.b64encode(content).decode()
+
+            try:
+                # 检查文件是否存在
+                file = repo.get_contents("monitor.db")
+                
+                # 删除所有以 "monitor_backup" 开头的文件
+                contents = repo.get_contents("")
+                for content_file in contents:
+                    if content_file.path.startswith("monitor_backup"):
+                        repo.delete_file(
+                            content_file.path,
+                            "Remove old backup",
+                            content_file.sha
+                        )
+                        print(f"已删除旧备份: {content_file.path}")
+
+                # 更新主数据库文件
+                repo.update_file(
+                    path="monitor.db",
+                    message=f"Update database: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                    content=content_b64,
+                    sha=file.sha
+                )
+                print("数据库文件已更新")
+                
+            except Exception as e:
+                if "404" in str(e):  # 文件不存在
+                    # 创建新文件
+                    repo.create_file(
+                        path="monitor.db",
+                        message=f"Create database: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                        content=content_b64
+                    )
+                    print("数据库文件已创建")
+                else:
+                    raise
+
+            print("=== 数据库推送成功 ===\n")
+            return True, "数据库推送成功"
+
+        except Exception as e:
+            error_msg = f"推送数据库失败: {str(e)}"
+            print(f"错误: {error_msg}")
+            return False, error_msg
+
+    except Exception as e:
+        error_msg = f"同步过程发生异常: {str(e)}"
+        print(f"错误: {error_msg}")
+        return False, error_msg 
