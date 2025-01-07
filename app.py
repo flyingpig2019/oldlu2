@@ -10,6 +10,7 @@ from calendar import monthcalendar
 from github_utils import pull_db_from_github, push_db_updates, upload_to_github, download_from_github
 import xlsxwriter
 import io
+import time
 
 app = Flask(__name__)
 
@@ -139,8 +140,12 @@ def get_db():
         if not os.path.exists(db_dir):
             os.makedirs(db_dir, mode=0o755)
 
+        # 如果数据库文件不存在，创建一个新的
+        if not os.path.exists(db_path):
+            init_db()
+
         try:
-            # 尝试连接数据库并验证，添加超时和错误处理
+            # 尝试连接数据库并验证
             conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
             conn.row_factory = sqlite3.Row
             
@@ -148,18 +153,27 @@ def get_db():
             try:
                 conn.execute("SELECT 1")
             except sqlite3.DatabaseError:
-                print("数据库文件损坏")
-                conn.close()
-                # 不删除文件，而是创建新的数据库文件
-                new_db_path = f'monitor_new_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
-                init_db(new_db_path)
-                # 重命名文件
+                print("数据库文件损坏，重新创建...")
+                # 确保关闭所有连接
+                try:
+                    conn.close()
+                except:
+                    pass
+
+                # 等待一段时间，让其他进程释放文件
+                time.sleep(1)
+                
+                # 尝试删除损坏的数据库文件
                 try:
                     if os.path.exists(db_path):
-                        os.rename(db_path, f'monitor_corrupt_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db')
-                except:
-                    pass  # 如果重命名失败，继续使用新文件
-                os.rename(new_db_path, db_path)
+                        os.remove(db_path)
+                except Exception as e:
+                    print(f"删除损坏的数据库文件失败: {str(e)}")
+                    # 如果无法删除，使用一个临时的数据库文件
+                    db_path = 'monitor_temp.db'
+
+                # 创建新的数据库
+                init_db()
                 conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
                 conn.row_factory = sqlite3.Row
                 
@@ -170,24 +184,35 @@ def get_db():
                 SELECT name FROM sqlite_master WHERE type='table'
             """).fetchall())
             
-            # 如果缺少任何表，创建它们（而不是重新初始化整个数据库）
+            # 如果缺少任何表，创建它们
             if not all(table in existing_tables for table in tables_to_check):
                 print("补充缺失的数据表...")
-                init_db()  # 这里的 init_db 会使用 CREATE TABLE IF NOT EXISTS
+                init_db()
             
             return conn
 
         except sqlite3.DatabaseError as e:
             print(f"数据库访问错误: {str(e)}")
-            # 创建新的数据库文件而不是尝试删除旧文件
-            new_db_path = f'monitor_new_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
-            init_db(new_db_path)
+            # 确保关闭所有连接
+            try:
+                conn.close()
+            except:
+                pass
+
+            # 等待一段时间，让其他进程释放文件
+            time.sleep(1)
+            
+            # 尝试删除损坏的数据库文件
             try:
                 if os.path.exists(db_path):
-                    os.rename(db_path, f'monitor_error_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db')
-            except:
-                pass  # 如果重命名失败，继续使用新文件
-            os.rename(new_db_path, db_path)
+                    os.remove(db_path)
+            except Exception as e:
+                print(f"删除损坏的数据库文件失败: {str(e)}")
+                # 如果无法删除，使用一个临时的数据库文件
+                db_path = 'monitor_temp.db'
+
+            # 创建新的数据库
+            init_db()
             conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
             conn.row_factory = sqlite3.Row
             return conn
@@ -196,10 +221,10 @@ def get_db():
         print(f"连接数据库时出错: {str(e)}")
         raise
 
-def init_db(db_path='monitor.db'):
+def init_db():
     """初始化数据库结构"""
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect('monitor.db')
         c = conn.cursor()
         
         # 创建所需的表
@@ -257,11 +282,16 @@ def init_db(db_path='monitor.db'):
         
         conn.commit()
         conn.close()
-        print(f"数据库初始化成功: {db_path}")
+        print("数据库初始化成功")
         return True
     except Exception as e:
         print(f"初始化数据库失败: {str(e)}")
         return False
+
+def get_chinese_weekday(date_str):
+    """将日期转换为中文星期几"""
+    english_weekday = datetime.strptime(date_str, '%Y-%m-%d').strftime('%A')
+    return WEEKDAYS[english_weekday]
 
 @app.route('/add_medicine_record', methods=['POST'])
 @login_required

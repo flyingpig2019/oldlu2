@@ -4,6 +4,19 @@ from datetime import datetime
 import base64
 import sqlite3
 
+def close_all_db_connections():
+    """关闭所有数据库连接"""
+    try:
+        # 创建一个临时连接来执行 PRAGMA 命令
+        conn = sqlite3.connect('monitor.db')
+        # 获取所有打开的数据库连接
+        conn.execute("PRAGMA database_list")
+        # 关闭连接
+        conn.close()
+        return True
+    except:
+        return False
+
 def upload_to_github():
     """将本地数据库上传到 GitHub（直接替换）"""
     try:
@@ -15,6 +28,9 @@ def upload_to_github():
             return False, "环境变量未正确设置"
 
         print("\n=== 开始上传数据库到GitHub ===")
+
+        # 确保所有数据库连接已关闭
+        close_all_db_connections()
 
         # 连接到GitHub
         g = Github(token)
@@ -66,6 +82,9 @@ def download_from_github():
             return False, "环境变量未正确设置"
 
         print("\n=== 开始从GitHub下载数据库 ===")
+
+        # 确保所有数据库连接已关闭
+        close_all_db_connections()
 
         # 连接到GitHub
         g = Github(token)
