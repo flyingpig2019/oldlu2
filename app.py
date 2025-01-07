@@ -7,7 +7,7 @@ import logging
 from dotenv import load_dotenv
 from functools import wraps
 from calendar import monthcalendar
-from github_utils import pull_db_from_github, push_db_updates, upload_to_github, download_from_github
+from github_utils import pull_db_from_github, push_db_updates, upload_to_github, download_from_github, force_upload_to_github
 import xlsxwriter
 import io
 import time
@@ -71,36 +71,63 @@ def logout():
 @app.route('/landing')
 @login_required
 def landing():
-    # 获取最近的血压记录
-    db = get_db()
-    last_bp = db.execute('''
-        SELECT morning_high, morning_low, afternoon_high, afternoon_low 
-        FROM bloodpressure_records 
-        ORDER BY date DESC LIMIT 1
-    ''').fetchone()
+    try:
+        # 获取最近的血压记录
+        db = get_db()
+        try:
+            last_bp = db.execute('''
+                SELECT morning_high, morning_low, afternoon_high, afternoon_low 
+                FROM bloodpressure_records 
+                ORDER BY date DESC LIMIT 1
+            ''').fetchone()
 
-    last_bp2 = db.execute('''
-        SELECT morning_high, morning_low, afternoon_high, afternoon_low 
-        FROM bloodpressure2_records 
-        ORDER BY date DESC LIMIT 1
-    ''').fetchone()
+            last_bp2 = db.execute('''
+                SELECT morning_high, morning_low, afternoon_high, afternoon_low 
+                FROM bloodpressure2_records 
+                ORDER BY date DESC LIMIT 1
+            ''').fetchone()
 
-    last_bp3 = db.execute('''
-        SELECT morning_high, morning_low, afternoon_high, afternoon_low 
-        FROM bloodpressure3_records 
-        ORDER BY date DESC LIMIT 1
-    ''').fetchone()
+            last_bp3 = db.execute('''
+                SELECT morning_high, morning_low, afternoon_high, afternoon_low 
+                FROM bloodpressure3_records 
+                ORDER BY date DESC LIMIT 1
+            ''').fetchone()
 
-    db.close()
+            db.close()
+            
+            return render_template('landing.html', 
+                current_date=datetime.now().strftime('%Y-%m-%d'),
+                last_bp=last_bp or {'morning_high': '', 'morning_low': '', 
+                                  'afternoon_high': '', 'afternoon_low': ''},
+                last_bp2=last_bp2 or {'morning_high': '', 'morning_low': '', 
+                                    'afternoon_high': '', 'afternoon_low': ''},
+                last_bp3=last_bp3 or {'morning_high': '', 'morning_low': '', 
+                                    'afternoon_high': '', 'afternoon_low': ''})
 
-    return render_template('landing.html', 
-        current_date=datetime.now().strftime('%Y-%m-%d'),
-        last_bp=last_bp or {'morning_high': '', 'morning_low': '', 
-                           'afternoon_high': '', 'afternoon_low': ''},
-        last_bp2=last_bp2 or {'morning_high': '', 'morning_low': '', 
-                             'afternoon_high': '', 'afternoon_low': ''},
-        last_bp3=last_bp3 or {'morning_high': '', 'morning_low': '', 
-                             'afternoon_high': '', 'afternoon_low': ''})
+        except Exception as e:
+            db.close()
+            print(f"查询数据库时出错: {str(e)}")
+            # 返回空记录
+            return render_template('landing.html',
+                current_date=datetime.now().strftime('%Y-%m-%d'),
+                last_bp={'morning_high': '', 'morning_low': '', 
+                        'afternoon_high': '', 'afternoon_low': ''},
+                last_bp2={'morning_high': '', 'morning_low': '', 
+                         'afternoon_high': '', 'afternoon_low': ''},
+                last_bp3={'morning_high': '', 'morning_low': '', 
+                         'afternoon_high': '', 'afternoon_low': ''})
+
+    except Exception as e:
+        print(f"访问页面时出错: {str(e)}")
+        # 返回空记录
+        return render_template('landing.html',
+            current_date=datetime.now().strftime('%Y-%m-%d'),
+            last_bp={'morning_high': '', 'morning_low': '', 
+                    'afternoon_high': '', 'afternoon_low': ''},
+            last_bp2={'morning_high': '', 'morning_low': '', 
+                     'afternoon_high': '', 'afternoon_low': ''},
+            last_bp3={'morning_high': '', 'morning_low': '', 
+                     'afternoon_high': '', 'afternoon_low': ''})
 
 @app.route('/upload_database')
 @login_required
@@ -133,83 +160,29 @@ def download_database():
     return redirect(url_for('landing'))
 
 def get_db():
+    """连接数据库，确保数据库文件有效"""
     db_path = 'monitor.db'
     try:
-        # 确保数据库目录存在且有正确的权限
-        db_dir = os.path.dirname(os.path.abspath(db_path))
-        if not os.path.exists(db_dir):
-            os.makedirs(db_dir, mode=0o755)
-
-        # 如果数据库文件不存在，创建一个新的
-        if not os.path.exists(db_path):
-            init_db()
-
+        # 如果数据库文件不存在或损坏，创建新的
         try:
-            # 尝试连接数据库并验证
             conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
             conn.row_factory = sqlite3.Row
-            
-            # 尝试执行一个简单的查询来验证数据库
-            try:
-                conn.execute("SELECT 1")
-            except sqlite3.DatabaseError:
-                print("数据库文件损坏，重新创建...")
-                # 确保关闭所有连接
-                try:
-                    conn.close()
-                except:
-                    pass
-
-                # 等待一段时间，让其他进程释放文件
-                time.sleep(1)
-                
-                # 尝试删除损坏的数据库文件
-                try:
-                    if os.path.exists(db_path):
-                        os.remove(db_path)
-                except Exception as e:
-                    print(f"删除损坏的数据库文件失败: {str(e)}")
-                    # 如果无法删除，使用一个临时的数据库文件
-                    db_path = 'monitor_temp.db'
-
-                # 创建新的数据库
-                init_db()
-                conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
-                conn.row_factory = sqlite3.Row
-                
-            # 确保所有必需的表存在
-            tables_to_check = ['medicine_records', 'checkin_records', 'bloodpressure_records', 
-                             'bloodpressure2_records', 'bloodpressure3_records']
-            existing_tables = set(row[0] for row in conn.execute("""
-                SELECT name FROM sqlite_master WHERE type='table'
-            """).fetchall())
-            
-            # 如果缺少任何表，创建它们
-            if not all(table in existing_tables for table in tables_to_check):
-                print("补充缺失的数据表...")
-                init_db()
-            
+            # 测试数据库
+            conn.execute("SELECT 1")
             return conn
-
-        except sqlite3.DatabaseError as e:
-            print(f"数据库访问错误: {str(e)}")
-            # 确保关闭所有连接
+        except:
+            # 关闭任何可能的连接
             try:
                 conn.close()
             except:
                 pass
 
-            # 等待一段时间，让其他进程释放文件
-            time.sleep(1)
-            
-            # 尝试删除损坏的数据库文件
+            # 删除损坏的数据库文件
             try:
                 if os.path.exists(db_path):
                     os.remove(db_path)
-            except Exception as e:
-                print(f"删除损坏的数据库文件失败: {str(e)}")
-                # 如果无法删除，使用一个临时的数据库文件
-                db_path = 'monitor_temp.db'
+            except:
+                pass
 
             # 创建新的数据库
             init_db()
@@ -219,10 +192,17 @@ def get_db():
 
     except Exception as e:
         print(f"连接数据库时出错: {str(e)}")
-        raise
+        # 如果还是失败，尝试最后一次初始化
+        try:
+            init_db()
+            conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            return conn
+        except:
+            raise
 
 def init_db():
-    """初始化数据库结构"""
+    """初始化新的数据库"""
     try:
         conn = sqlite3.connect('monitor.db')
         c = conn.cursor()
@@ -283,10 +263,9 @@ def init_db():
         conn.commit()
         conn.close()
         print("数据库初始化成功")
-        return True
     except Exception as e:
         print(f"初始化数据库失败: {str(e)}")
-        return False
+        raise
 
 def get_chinese_weekday(date_str):
     """将日期转换为中文星期几"""
@@ -296,106 +275,133 @@ def get_chinese_weekday(date_str):
 @app.route('/add_medicine_record', methods=['POST'])
 @login_required
 def add_medicine_record():
-    date = request.form['date']
-    day_of_week = get_chinese_weekday(date)
-    medicine_taken = 'medicine_taken' in request.form
-    notes = request.form.get('notes', '')
-    
-    db = get_db()
-    db.execute('''INSERT INTO medicine_records 
-                  (date, day_of_week, medicine_taken, notes)
-                  VALUES (?, ?, ?, ?)''',
-                 [date, day_of_week, medicine_taken, notes])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('landing'))
+    try:
+        date = request.form['date']
+        day_of_week = get_chinese_weekday(date)
+        medicine_taken = 'medicine_taken' in request.form
+        notes = request.form.get('notes', '')
+        
+        db = get_db()
+        db.execute('''INSERT INTO medicine_records 
+                     (date, day_of_week, medicine_taken, notes)
+                     VALUES (?, ?, ?, ?)''',
+                    [date, day_of_week, medicine_taken, notes])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('landing'))
+    except Exception as e:
+        print(f"添加药物记录时出错: {str(e)}")
+        return redirect(url_for('landing'))
 
 @app.route('/medicine_detail')
 @login_required
 def medicine_detail():
-    page = request.args.get('page', 1, type=int)
-    per_page = 10
-    
-    db = get_db()
-    total = db.execute('SELECT COUNT(*) FROM medicine_records').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
-    
-    offset = (page - 1) * per_page
-    records = db.execute('''SELECT * FROM medicine_records 
-                            ORDER BY date DESC LIMIT ? OFFSET ?''',
-                         [per_page, offset]).fetchall()
-    db.close()
-    
-    return render_template('medicinedetail.html',
-                         records=records,
-                         current_page=page,
-                         total_pages=total_pages)
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = 10
+        
+        db = get_db()
+        try:
+            total = db.execute('SELECT COUNT(*) FROM medicine_records').fetchone()[0]
+            total_pages = (total + per_page - 1) // per_page
+            
+            offset = (page - 1) * per_page
+            records = db.execute('''SELECT * FROM medicine_records 
+                                  ORDER BY date DESC LIMIT ? OFFSET ?''',
+                               [per_page, offset]).fetchall()
+            db.close()
+            
+            return render_template('medicinedetail.html',
+                                records=records,
+                                current_page=page,
+                                total_pages=total_pages)
+                                
+        except sqlite3.DatabaseError:
+            # 如果数据库访问出错，初始化数据库
+            db.close()
+            init_db()
+            # 返回空记录
+            return render_template('medicinedetail.html',
+                                records=[],
+                                current_page=1,
+                                total_pages=1)
+                                
+    except Exception as e:
+        print(f"访问药物记录页面时出错: {str(e)}")
+        # 返回空记录
+        return render_template('medicinedetail.html',
+                            records=[],
+                            current_page=1,
+                            total_pages=1)
 
 @app.route('/edit_medicine_record/<int:id>', methods=['POST'])
 @login_required
 def edit_medicine_record(id):
-    medicine_taken = 'medicine_taken' in request.form
-    notes = request.form.get('notes', '')
-    
-    db = get_db()
-    db.execute('''UPDATE medicine_records 
-                  SET medicine_taken = ?, notes = ?
-                  WHERE id = ?''',
-                 [medicine_taken, notes, id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('medicine_detail'))
+    try:
+        medicine_taken = 'medicine_taken' in request.form
+        notes = request.form.get('notes', '')
+        
+        db = get_db()
+        db.execute('UPDATE medicine_records SET medicine_taken = ?, notes = ? WHERE id = ?',
+                  [medicine_taken, notes, id])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('medicine_detail'))
+    except Exception as e:
+        print(f"编辑药物记录时出错: {str(e)}")
+        return redirect(url_for('medicine_detail'))
 
 @app.route('/delete_medicine_record/<int:id>')
 @login_required
 def delete_medicine_record(id):
-    db = get_db()
-    db.execute('DELETE FROM medicine_records WHERE id = ?', [id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('medicine_detail'))
+    try:
+        db = get_db()
+        db.execute('DELETE FROM medicine_records WHERE id = ?', [id])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('medicine_detail'))
+    except Exception as e:
+        print(f"删除药物记录时出错: {str(e)}")
+        return redirect(url_for('medicine_detail'))
 
 @app.route('/add_checkin_record', methods=['POST'])
 @login_required
 def add_checkin_record():
-    date = request.form['date']
-    day_of_week = get_chinese_weekday(date)
-    checkin = 'checkin' in request.form
-    checkout = 'checkout' in request.form
-    notes = request.form.get('notes', '')
-    # 如果签退，必须保持签到状态为True
-    if checkout:
-        checkin = True
-    # 如果签到和签退都完成，设置收入为75
-    income = 75 if checkin and checkout else 0
-    
-    db = get_db()
-    # 检查是否已存在当天的记录
-    existing = db.execute('SELECT * FROM checkin_records WHERE date = ?', [date]).fetchone()
-    
-    if existing:
-        # 更新现有记录
-        db.execute('''UPDATE checkin_records 
-                      SET checkin = ?, checkout = ?, notes = ?, income = ?
-                      WHERE date = ?''',
-                   [checkin, checkout, notes, income, date])
-    else:
-        # 创建新记录
+    try:
+        date = request.form['date']
+        day_of_week = get_chinese_weekday(date)
+        checkin = 'checkin' in request.form
+        checkout = 'checkout' in request.form
+        notes = request.form.get('notes', '')
+        income = request.form.get('income', 0)
+        
+        db = get_db()
         db.execute('''INSERT INTO checkin_records 
-                      (date, day_of_week, checkin, checkout, notes, income)
-                      VALUES (?, ?, ?, ?, ?, ?)''',
-                   [date, day_of_week, checkin, checkout, notes, income])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('landing'))
+                     (date, day_of_week, checkin, checkout, notes, income)
+                     VALUES (?, ?, ?, ?, ?, ?)''',
+                    [date, day_of_week, checkin, checkout, notes, income])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('landing'))
+    except Exception as e:
+        print(f"添加签到记录时出错: {str(e)}")
+        return redirect(url_for('landing'))
 
 @app.route('/checkin_detail')
 @login_required
@@ -527,68 +533,33 @@ def checkin_calendar_month(year, month):
 @app.route('/add_blood_pressure', methods=['POST'])
 @login_required
 def add_blood_pressure():
-    date = request.form['date']
-    day_of_week = get_chinese_weekday(date)
-    notes = request.form.get('notes', '')
-    
-    def calculate_risk(high, low):
-        if not high or not low:
-            return None
-        if high > 140 or low > 90:
-            return 'high risk'
-        elif high > 130 or low > 85:
-            return 'middle risk'
-        elif high > 120 or low > 80:
-            return 'low risk'
-        else:
-            return 'good'
-    
-    if 'morning_submit' in request.form:
-        morning_high = request.form.get('morning_high', 0)
-        morning_low = request.form.get('morning_low', 0)
+    try:
+        date = request.form['date']
+        day_of_week = get_chinese_weekday(date)
+        morning_high = request.form.get('morning_high', '')
+        morning_low = request.form.get('morning_low', '')
+        afternoon_high = request.form.get('afternoon_high', '')
+        afternoon_low = request.form.get('afternoon_low', '')
+        notes = request.form.get('notes', '')
+        risk = request.form.get('risk', '')
         
         db = get_db()
-        existing = db.execute('SELECT * FROM bloodpressure_records WHERE date = ?', [date]).fetchone()
-        
-        risk = calculate_risk(int(morning_high), int(morning_low))
-        
-        if existing:
-            db.execute('''UPDATE bloodpressure_records 
-                         SET morning_high = ?, morning_low = ?, notes = ?, risk = ?
-                         WHERE date = ?''', 
-                        [morning_high, morning_low, notes, risk, date])
-        else:
-            db.execute('''INSERT INTO bloodpressure_records 
-                         (date, day_of_week, morning_high, morning_low, notes, risk)
-                         VALUES (?, ?, ?, ?, ?, ?)''',
-                        [date, day_of_week, morning_high, morning_low, notes, risk])
-        
+        db.execute('''INSERT INTO bloodpressure_records 
+                     (date, day_of_week, morning_high, morning_low, 
+                      afternoon_high, afternoon_low, notes, risk)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                    [date, day_of_week, morning_high, morning_low, 
+                     afternoon_high, afternoon_low, notes, risk])
         db.commit()
         db.close()
-    
-    elif 'afternoon_submit' in request.form:
-        afternoon_high = request.form.get('afternoon_high', 0)
-        afternoon_low = request.form.get('afternoon_low', 0)
         
-        db = get_db()
-        existing = db.execute('SELECT * FROM bloodpressure_records WHERE date = ?', [date]).fetchone()
+        # 自动上传到 GitHub
+        force_upload_to_github()
         
-        if existing:
-            db.execute('''UPDATE bloodpressure_records 
-                         SET afternoon_high = ?, afternoon_low = ?, notes = ?
-                         WHERE date = ?''', 
-                        [afternoon_high, afternoon_low, notes, date])
-        else:
-            db.execute('''INSERT INTO bloodpressure_records 
-                         (date, day_of_week, afternoon_high, afternoon_low, notes)
-                         VALUES (?, ?, ?, ?, ?)''',
-                        [date, day_of_week, afternoon_high, afternoon_low, notes])
-        
-        db.commit()
-        db.close()
-    
-    push_db_updates()
-    return redirect(url_for('landing'))
+        return redirect(url_for('landing'))
+    except Exception as e:
+        print(f"添加血压记录时出错: {str(e)}")
+        return redirect(url_for('landing'))
 
 @app.route('/blood_pressure_detail')
 @login_required

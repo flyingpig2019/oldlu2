@@ -12,8 +12,7 @@
                         <i class="fas fa-tachometer-alt me-2"></i>健康监测面板
                     </h1>
                     <div class="btn-group" role="group">
-                        <a href="{{ url_for('upload_database') }}" class="btn btn-primary">上传数据库到GitHub</a>
-                        <a href="{{ url_for('download_database') }}" class="btn btn-warning">从GitHub下载数据库</a>
+                        <a href="{{ url_for('download_database') }}" class="btn btn-primary">从GitHub下载数据库</a>
                     </div>
                 </div>
                 {% with messages = get_flashed_messages(with_categories=true) %}
