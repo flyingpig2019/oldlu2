@@ -121,50 +121,32 @@ def get_db():
         if not os.path.exists(db_dir):
             os.makedirs(db_dir, mode=0o755)
 
-        # 如果数据库文件不存在或大小为0，重新初始化
-        if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
-            print("数据库文件不存在或为空，正在初始化...")
+        # 如果数据库文件不存在，才初始化
+        if not os.path.exists(db_path):
+            print("数据库文件不存在，正在初始化...")
             init_db()
 
         # 尝试连接数据库
         conn = sqlite3.connect(db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
 
-        # 验证数据库结构
-        try:
-            # 检查所有必需的表是否存在
-            tables = conn.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND 
-                name IN ('medicine_records', 'checkin_records', 'bloodpressure_records', 'bloodpressure2_records', 'bloodpressure3_records')
-            """).fetchall()
-            
-            if len(tables) < 5:
-                raise sqlite3.DatabaseError("数据库结构不完整")
-                
-            return conn
-        except sqlite3.DatabaseError:
-            conn.close()
-            print("数据库结构无效，重新初始化...")
-            os.remove(db_path)
-            init_db()
-            conn = sqlite3.connect(db_path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            return conn
+        # 确保所有必需的表存在
+        tables_to_check = ['medicine_records', 'checkin_records', 'bloodpressure_records', 
+                          'bloodpressure2_records', 'bloodpressure3_records']
+        existing_tables = set(row[0] for row in conn.execute("""
+            SELECT name FROM sqlite_master WHERE type='table'
+        """).fetchall())
+        
+        # 如果缺少任何表，创建它们（而不是重新初始化整个数据库）
+        if not all(table in existing_tables for table in tables_to_check):
+            print("补充缺失的数据表...")
+            init_db()  # 这里的 init_db 会使用 CREATE TABLE IF NOT EXISTS
+        
+        return conn
 
     except sqlite3.DatabaseError as e:
         print(f"数据库访问错误: {str(e)}")
-        try:
-            # 尝试删除并重新创建数据库
-            if os.path.exists(db_path):
-                os.remove(db_path)
-            init_db()
-            conn = sqlite3.connect(db_path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            return conn
-        except Exception as inner_e:
-            print(f"重建数据库失败: {str(inner_e)}")
-            raise
+        raise
     except Exception as e:
         print(f"连接数据库时出错: {str(e)}")
         raise
