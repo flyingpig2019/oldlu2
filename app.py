@@ -121,35 +121,51 @@ def get_db():
         if not os.path.exists(db_dir):
             os.makedirs(db_dir, mode=0o755)
 
-        # 如果数据库文件不存在，才初始化
-        if not os.path.exists(db_path):
-            print("数据库文件不存在，正在初始化...")
-            init_db()
+        try:
+            # 尝试连接数据库并验证
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            
+            # 尝试执行一个简单的查询来验证数据库
+            try:
+                conn.execute("SELECT 1")
+            except sqlite3.DatabaseError:
+                print("数据库文件损坏，重新创建...")
+                conn.close()
+                os.remove(db_path)
+                return init_and_get_db()
+                
+            # 确保所有必需的表存在
+            tables_to_check = ['medicine_records', 'checkin_records', 'bloodpressure_records', 
+                             'bloodpressure2_records', 'bloodpressure3_records']
+            existing_tables = set(row[0] for row in conn.execute("""
+                SELECT name FROM sqlite_master WHERE type='table'
+            """).fetchall())
+            
+            # 如果缺少任何表，创建它们（而不是重新初始化整个数据库）
+            if not all(table in existing_tables for table in tables_to_check):
+                print("补充缺失的数据表...")
+                init_db()  # 这里的 init_db 会使用 CREATE TABLE IF NOT EXISTS
+            
+            return conn
 
-        # 尝试连接数据库
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
+        except sqlite3.DatabaseError as e:
+            print(f"数据库访问错误: {str(e)}")
+            # 如果数据库文件有问题，删除它并重新创建
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            return init_and_get_db()
 
-        # 确保所有必需的表存在
-        tables_to_check = ['medicine_records', 'checkin_records', 'bloodpressure_records', 
-                          'bloodpressure2_records', 'bloodpressure3_records']
-        existing_tables = set(row[0] for row in conn.execute("""
-            SELECT name FROM sqlite_master WHERE type='table'
-        """).fetchall())
-        
-        # 如果缺少任何表，创建它们（而不是重新初始化整个数据库）
-        if not all(table in existing_tables for table in tables_to_check):
-            print("补充缺失的数据表...")
-            init_db()  # 这里的 init_db 会使用 CREATE TABLE IF NOT EXISTS
-        
-        return conn
-
-    except sqlite3.DatabaseError as e:
-        print(f"数据库访问错误: {str(e)}")
-        raise
     except Exception as e:
         print(f"连接数据库时出错: {str(e)}")
         raise
+
+def init_and_get_db():
+    """初始化数据库并返回连接"""
+    init_db()
+    conn = sqlite3.connect('monitor.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def get_chinese_weekday(date_str):
     english_weekday = datetime.strptime(date_str, '%Y-%m-%d').strftime('%A')
