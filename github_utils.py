@@ -72,7 +72,7 @@ def upload_to_github():
         return False, error_msg
 
 def download_from_github():
-    """从 GitHub 下载数据库"""
+    """从 GitHub 下载数据库并直接覆盖本地数据库"""
     try:
         token = os.getenv('GITHUB_TOKEN')
         repo_name = os.getenv('GITHUB_REPO')
@@ -95,17 +95,7 @@ def download_from_github():
             file = repo.get_contents("monitor.db")
             content = base64.b64decode(file.content)
 
-            # 备份当前数据库
-            if os.path.exists('monitor.db'):
-                backup_name = f'monitor_local_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.db'
-                try:
-                    with open('monitor.db', 'rb') as src, open(backup_name, 'wb') as dst:
-                        dst.write(src.read())
-                    print(f"已备份当前数据库为: {backup_name}")
-                except:
-                    pass
-
-            # 写入新的数据库文件
+            # 直接覆盖本地数据库文件
             with open('monitor.db', 'wb') as f:
                 f.write(content)
 
