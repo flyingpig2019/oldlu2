@@ -167,52 +167,41 @@
         </form>
     </div>
 
-    <!-- 收缩压趋势图 -->
+    <!-- 血压趋势图 -->
     <div class="chart-container">
         <div class="chart-header">
             <h6 class="chart-title">
-                <i class="fas fa-heartbeat me-2"></i>收缩压趋势
+                <i class="fas fa-heartbeat me-2"></i>血压趋势
             </h6>
-            <p class="chart-description">显示最近记录的收缩压变化趋势，包括晨间和晚间测量值</p>
+            <p class="chart-description">显示最近记录的血压变化趋势，包括收缩压和舒张压的晨间和晚间测量值</p>
         </div>
         <div class="legend-container">
             <div class="legend-item">
                 <div class="legend-color" style="background-color: #4e73df;"></div>
-                <span>晨间收缩压</span>
+                <span>晨间高压</span>
             </div>
             <div class="legend-item">
                 <div class="legend-color" style="background-color: #1cc88a;"></div>
-                <span>晚间收缩压</span>
+                <span>晚间高压</span>
             </div>
-        </div>
-        <canvas id="highPressureChart"></canvas>
-    </div>
-
-    <!-- 舒张压趋势图 -->
-    <div class="chart-container">
-        <div class="chart-header">
-            <h6 class="chart-title">
-                <i class="fas fa-heart me-2"></i>舒张压趋势
-            </h6>
-            <p class="chart-description">显示最近记录的舒张压变化趋势，包括晨间和晚间测量值</p>
-        </div>
-        <div class="legend-container">
             <div class="legend-item">
                 <div class="legend-color" style="background-color: #36b9cc;"></div>
-                <span>晨间舒张压</span>
+                <span>晨间低压</span>
             </div>
             <div class="legend-item">
                 <div class="legend-color" style="background-color: #f6c23e;"></div>
-                <span>晚间舒张压</span>
+                <span>晚间低压</span>
             </div>
         </div>
-        <canvas id="lowPressureChart"></canvas>
+        <div class="chart-wrapper">
+            <canvas id="bloodPressureChart"></canvas>
+        </div>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var ctx = document.getElementById('highPressureChart').getContext('2d');
+    var ctx = document.getElementById('bloodPressureChart').getContext('2d');
     var myChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -233,35 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     backgroundColor: 'rgba(28, 200, 138, 0.1)',
                     tension: 0.1,
                     fill: true
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: '收缩压变化趋势图'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    min: 40,
-                    max: 180
-                }
-            }
-        }
-    });
-});
-
-document.addEventListener('DOMContentLoaded', function() {
-    var ctx = document.getElementById('lowPressureChart').getContext('2d');
-    var myChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: {{ dates|tojson }},
-            datasets: [
+                },
                 {
                     label: '晨间舒张压',
                     data: {{ morning_low|tojson }},
@@ -282,17 +243,40 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 20,
+                    right: 20,
+                    bottom: 20,
+                    left: 20
+                }
+            },
             plugins: {
                 title: {
                     display: true,
-                    text: '舒张压变化趋势图'
+                    text: '血压变化趋势图'
+                },
+                legend: {
+                    position: 'top',
+                    labels: {
+                        padding: 20
+                    }
                 }
             },
             scales: {
                 y: {
                     beginAtZero: false,
                     min: 40,
-                    max: 180
+                    max: 180,
+                    grid: {
+                        drawBorder: false
+                    }
+                },
+                x: {
+                    grid: {
+                        drawBorder: false
+                    }
                 }
             }
         }
