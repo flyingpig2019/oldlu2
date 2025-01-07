@@ -7,7 +7,7 @@ import logging
 from dotenv import load_dotenv
 from functools import wraps
 from calendar import monthcalendar
-from github_utils import push_db_updates, pull_db_from_github
+from github_utils import pull_db_from_github
 import xlsxwriter
 import io
 
@@ -104,11 +104,13 @@ def landing():
 @app.route('/sync_database')
 @login_required
 def sync_database():
+    # 从GitHub拉取最新数据库
     success, message = pull_db_from_github()
-    if success:
-        flash('数据库同步成功！', 'success')
+    if not success:
+        flash(message, 'error')
     else:
-        flash(f'数据库同步失败：{message}', 'danger')
+        flash(message, 'success')
+    
     return redirect(url_for('landing'))
 
 def get_db():
@@ -283,7 +285,6 @@ def add_medicine_record():
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/medicine_detail')
@@ -321,7 +322,6 @@ def edit_medicine_record(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('medicine_detail'))
 
 @app.route('/delete_medicine_record/<int:id>')
@@ -332,7 +332,6 @@ def delete_medicine_record(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('medicine_detail'))
 
 @app.route('/add_checkin_record', methods=['POST'])
@@ -368,7 +367,6 @@ def add_checkin_record():
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('landing'))
 
 @app.route('/checkin_detail')
@@ -412,7 +410,6 @@ def edit_checkin_record(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('checkin_detail'))
 
 @app.route('/delete_checkin_record/<int:id>')
@@ -423,7 +420,6 @@ def delete_checkin_record(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('checkin_detail'))
 
 @app.route('/checkin_calendar')
@@ -539,7 +535,6 @@ def add_blood_pressure():
         
         db.commit()
         db.close()
-        push_db_updates()
     
     elif 'afternoon_submit' in request.form:
         afternoon_high = request.form.get('afternoon_high', 0)
@@ -561,7 +556,6 @@ def add_blood_pressure():
         
         db.commit()
         db.close()
-        push_db_updates()
     
     return redirect(url_for('landing'))
 
@@ -622,7 +616,6 @@ def edit_blood_pressure(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/delete_blood_pressure/<int:id>')
@@ -633,7 +626,6 @@ def delete_blood_pressure(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/add_blood_pressure2', methods=['POST'])
@@ -677,7 +669,6 @@ def add_blood_pressure2():
         
         db.commit()
         db.close()
-        push_db_updates()
     
     elif 'afternoon_submit' in request.form:
         afternoon_high = request.form.get('afternoon_high', 0)
@@ -699,7 +690,6 @@ def add_blood_pressure2():
         
         db.commit()
         db.close()
-        push_db_updates()
     
     return redirect(url_for('landing'))
 
@@ -753,7 +743,6 @@ def add_blood_pressure3():
         
         db.commit()
         db.close()
-        push_db_updates()
     
     elif 'afternoon_submit' in request.form:
         afternoon_high = request.form.get('afternoon_high', 0)
@@ -784,7 +773,6 @@ def add_blood_pressure3():
         
         db.commit()
         db.close()
-        push_db_updates()
     
     return redirect(url_for('landing'))
 
@@ -862,7 +850,6 @@ def edit_blood_pressure2(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('blood_pressure2_detail'))
 
 @app.route('/delete_blood_pressure2/<int:id>')
@@ -873,7 +860,6 @@ def delete_blood_pressure2(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('blood_pressure2_detail'))
 
 @app.route('/blood_pressure3_detail')
@@ -942,7 +928,6 @@ def edit_blood_pressure3(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('blood_pressure3_detail'))
 
 @app.route('/delete_blood_pressure3/<int:id>')
@@ -953,7 +938,6 @@ def delete_blood_pressure3(id):
     db.commit()
     db.close()
     
-    push_db_updates()
     return redirect(url_for('blood_pressure3_detail'))
 
 @app.route('/medicine_calendar')
