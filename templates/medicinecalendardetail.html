@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}药物记录日历视图 - 健康监测系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .calendar {
+        margin-bottom: 2rem;
+        background: white;
+        border-radius: .35rem;
+        box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.15);
+        overflow: hidden;
+    }
+    
+    .calendar-header {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 1rem;
+        text-align: center;
+        font-weight: 700;
+        font-size: 1.25rem;
+    }
+    
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background-color: #e3e6f0;
+        padding: 1px;
+    }
+    
+    .calendar-cell {
+        background-color: white;
+        min-height: 100px;
+        padding: 0.75rem;
+        transition: all 0.3s ease;
+    }
+    
+    .calendar-cell:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+        z-index: 1;
+    }
+    
+    .calendar-cell.empty {
+        background-color: #f8f9fc;
+    }
+    
+    .calendar-weekday {
+        background-color: var(--secondary-color);
+        color: white;
+        padding: 0.75rem;
+        text-align: center;
+        font-weight: 600;
+    }
+    
+    .date-number {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--secondary-color);
+        margin-bottom: 0.5rem;
+    }
+    
+    .success {
+        background-color: #e8f5e9;
+        border-left: 4px solid var(--success-color);
+    }
+    
+    .fail {
+        background-color: #ffeef0;
+        border-left: 4px solid var(--danger-color);
+    }
+    
+    .status-text {
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        text-align: center;
+    }
+    
+    .success .status-text {
+        background-color: var(--success-color);
+        color: white;
+    }
+    
+    .fail .status-text {
+        background-color: var(--danger-color);
+        color: white;
+    }
+
+    @media (max-width: 768px) {
+        .calendar-cell {
+            min-height: 80px;
+            padding: 0.5rem;
+        }
+        
+        .date-number {
+            font-size: 1rem;
+        }
+        
+        .status-text {
+            font-size: 0.75rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="page-header">
+            <div class="container">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-calendar-alt me-2"></i>药物服用日历
+                    </h1>
+                    <a href="{{ url_for('medicine_detail') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left me-2"></i>返回详情
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        {% for month in months %}
+        <div class="calendar">
+            <div class="calendar-header">
+                {{ month.year }}年{{ month.month }}月
+            </div>
+            <div class="calendar-grid">
+                <div class="calendar-weekday">星期日</div>
+                <div class="calendar-weekday">星期一</div>
+                <div class="calendar-weekday">星期二</div>
+                <div class="calendar-weekday">星期三</div>
+                <div class="calendar-weekday">星期四</div>
+                <div class="calendar-weekday">星期五</div>
+                <div class="calendar-weekday">星期六</div>
+                
+                {% for week in month.weeks %}
+                    {% for day in week %}
+                        {% if day.empty %}
+                            <div class="calendar-cell empty"></div>
+                        {% else %}
+                            <div class="calendar-cell {{ day.status }}">
+                                <div class="date-number">{{ day.day }}</div>
+                                {% if day.record %}
+                                    <div class="status-text">
+                                        {% if day.record.medicine_taken %}
+                                            <i class="fas fa-check-circle me-1"></i>已服药
+                                        {% else %}
+                                            <i class="fas fa-times-circle me-1"></i>未服药
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 添加统计卡片 -->
+<div class="row mt-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">本月服药率</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ medicine_rate }}%</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 添加一些动画效果
+    document.querySelectorAll('.calendar-cell:not(.empty)').forEach(cell => {
+        cell.addEventListener('mouseenter', function() {
+            this.style.transform = 'scale(1.05)';
+        });
+        
+        cell.addEventListener('mouseleave', function() {
+            this.style.transform = 'scale(1)';
+        });
+    });
+</script>
+{% endblock %} 

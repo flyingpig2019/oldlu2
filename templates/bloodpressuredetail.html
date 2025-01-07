@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+
+{% block title %}血压记录详情 - 健康监测系统{% endblock %}
+
+{% block extra_css %}
+<style>
+    .action-buttons .btn {
+        padding: .25rem .5rem;
+        font-size: .875rem;
+        margin: 0 .25rem;
+    }
+    
+    .table-responsive {
+        border-radius: .35rem;
+        box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.15);
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 1rem;
+    }
+    
+    .table tbody tr:hover {
+        background-color: #f8f9fc;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 1rem;
+    }
+    
+    .badge {
+        padding: .5rem .75rem;
+        font-size: .875rem;
+        font-weight: 600;
+    }
+    
+    .badge-success {
+        background-color: var(--success-color);
+    }
+    
+    .badge-warning {
+        background-color: var(--warning-color);
+    }
+    
+    .badge-danger {
+        background-color: var(--danger-color);
+    }
+    
+    .modal-content {
+        border: none;
+        border-radius: .35rem;
+    }
+    
+    .modal-header {
+        background-color: var(--primary-color);
+        color: white;
+        border-top-left-radius: .35rem;
+        border-top-right-radius: .35rem;
+    }
+    
+    .stats-card {
+        transition: all .3s ease;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .border-left-primary {
+        border-left: .25rem solid var(--primary-color) !important;
+    }
+    
+    .border-left-success {
+        border-left: .25rem solid var(--success-color) !important;
+    }
+    
+    .border-left-warning {
+        border-left: .25rem solid var(--warning-color) !important;
+    }
+    
+    .border-left-danger {
+        border-left: .25rem solid var(--danger-color) !important;
+    }
+    
+    .blood-pressure-value {
+        font-weight: 600;
+    }
+    
+    .risk-badge {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.65rem;
+        border-radius: 0.25rem;
+    }
+    
+    .risk-good {
+        background-color: var(--success-color);
+        color: white;
+    }
+    
+    .risk-low {
+        background-color: var(--info-color);
+        color: white;
+    }
+    
+    .risk-middle {
+        background-color: var(--warning-color);
+        color: #856404;
+    }
+    
+    .risk-high {
+        background-color: var(--danger-color);
+        color: white;
+    }
+    
+    /* 添加分页样式 */
+    .pagination {
+        margin: 0;
+    }
+    
+    .page-link {
+        color: var(--primary-color);
+        border: 1px solid #e3e6f0;
+        padding: .5rem .75rem;
+        margin: 0 .25rem;
+        border-radius: .35rem !important;
+    }
+    
+    .page-item.active .page-link {
+        background-color: var(--primary-color);
+        border-color: var(--primary-color);
+    }
+    
+    .page-item.disabled .page-link {
+        color: var(--secondary-color);
+        background-color: #f8f9fc;
+        border-color: #e3e6f0;
+    }
+    
+    .page-link:hover {
+        color: var(--primary-color);
+        background-color: #eaecf4;
+        border-color: #e3e6f0;
+    }
+    
+    .page-item.active .page-link:hover {
+        color: white;
+        background-color: var(--primary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="page-header">
+            <div class="container">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-heartbeat me-2"></i>血压记录详情
+                    </h1>
+                    <div>
+                        <a href="{{ url_for('blood_pressure_chart') }}" class="btn btn-info me-2">
+                            <i class="fas fa-chart-line me-2"></i>趋势图
+                        </a>
+                        <a href="{{ url_for('blood_pressure_average') }}" class="btn btn-info me-2">
+                            <i class="fas fa-calculator me-2"></i>平均值
+                        </a>
+                        <a href="{{ url_for('landing') }}" class="btn btn-primary ms-2">
+                            <i class="fas fa-arrow-left me-2"></i>返回首页
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    {% set risk_stats = namespace(good=0, low=0, middle=0, high=0) %}
+    {% for record in records %}
+        {% if record.risk == 'good' %}
+            {% set risk_stats.good = risk_stats.good + 1 %}
+        {% elif record.risk == 'low risk' %}
+            {% set risk_stats.low = risk_stats.low + 1 %}
+        {% elif record.risk == 'middle risk' %}
+            {% set risk_stats.middle = risk_stats.middle + 1 %}
+        {% elif record.risk == 'high risk' %}
+            {% set risk_stats.high = risk_stats.high + 1 %}
+        {% endif %}
+    {% endfor %}
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2 stats-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">正常记录</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ risk_stats.good }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2 stats-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">低风险</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ risk_stats.low }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-info-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2 stats-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">中风险</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ risk_stats.middle }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-danger shadow h-100 py-2 stats-card">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">高风险</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ risk_stats.high }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 记录表格 -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">详细记录</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>星期</th>
+                        <th>晨间血压</th>
+                        <th>晚间血压</th>
+                        <th>日均血压</th>
+                        <th>风险等级</th>
+                        <th>备注</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td>{{ record.date }}</td>
+                        <td>{{ record.day_of_week }}</td>
+                        <td>
+                            {% if record.morning_high and record.morning_low %}
+                                {{ record.morning_high }}/{{ record.morning_low }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if record.afternoon_high and record.afternoon_low %}
+                                {{ record.afternoon_high }}/{{ record.afternoon_low }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if record.daily_high and record.daily_low %}
+                                {{ record.daily_high }}/{{ record.daily_low }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge badge-{{ 'danger' if record.risk == 'high risk' 
+                                                    else 'warning' if record.risk == 'middle risk'
+                                                    else 'info' if record.risk == 'low risk'
+                                                    else 'success' }}">
+                                {{ record.risk or '正常' }}
+                            </span>
+                        </td>
+                        <td>{{ record.notes or '无' }}</td>
+                        <td class="action-buttons">
+                            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ record.id }}">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <a href="{{ url_for('delete_blood_pressure', id=record.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('确定要删除这条记录吗？')">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    
+                    <!-- 编辑模态框 -->
+                    <div class="modal fade" id="editModal{{ record.id }}" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">编辑记录</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form action="{{ url_for('edit_blood_pressure', id=record.id) }}" method="POST">
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">日期</label>
+                                            <input type="text" class="form-control" value="{{ record.date }}" readonly>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col">
+                                                <label class="form-label">早间高压</label>
+                                                <input type="number" class="form-control" name="morning_high" value="{{ record.morning_high }}">
+                                            </div>
+                                            <div class="col">
+                                                <label class="form-label">早间低压</label>
+                                                <input type="number" class="form-control" name="morning_low" value="{{ record.morning_low }}">
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col">
+                                                <label class="form-label">晚间高压</label>
+                                                <input type="number" class="form-control" name="afternoon_high" value="{{ record.afternoon_high }}">
+                                            </div>
+                                            <div class="col">
+                                                <label class="form-label">晚间低压</label>
+                                                <input type="number" class="form-control" name="afternoon_low" value="{{ record.afternoon_low }}">
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">备注</label>
+                                            <textarea class="form-control" name="notes" rows="3">{{ record.notes }}</textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                        <button type="submit" class="btn btn-primary">保存更改</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 在表格后面添加分页控件 -->
+<div class="card-footer">
+    <nav aria-label="Page navigation">
+        <ul class="pagination justify-content-center mb-0">
+            <!-- 上一页按钮 -->
+            <li class="page-item {{ 'disabled' if current_page == 1 }}">
+                <a class="page-link" href="{{ url_for('blood_pressure_detail', page=current_page-1) if current_page > 1 else '#' }}">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+            </li>
+            
+            <!-- 页码按钮 -->
+            {% for page in range(1, total_pages + 1) %}
+                {% if page == current_page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page }}</span>
+                    </li>
+                {% else %}
+                    <!-- 显示当前页附近的页码和首尾页 -->
+                    {% if page <= 2 or page >= total_pages - 1 or 
+                       (page >= current_page - 1 and page <= current_page + 1) %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('blood_pressure_detail', page=page) }}">{{ page }}</a>
+                        </li>
+                    {% elif page == 3 or page == total_pages - 2 %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            
+            <!-- 下一页按钮 -->
+            <li class="page-item {{ 'disabled' if current_page == total_pages }}">
+                <a class="page-link" href="{{ url_for('blood_pressure_detail', page=current_page+1) if current_page < total_pages else '#' }}">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</div>
+{% endblock %} 

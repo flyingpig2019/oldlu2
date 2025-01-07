@@ -1,0 +1,75 @@
+2025-01-05 22:22:26 - WARNING -  * Debugger is active!
+2025-01-05 22:22:26 - INFO -  * Debugger PIN: 780-676-183
+2025-01-05 22:22:46 - INFO - 127.0.0.1 - - [05/Jan/2025 22:22:46] "[32mPOST /edit_blood_pressure/4 HTTP/1.1[0m" 302 -
+2025-01-05 22:22:46 - INFO - 127.0.0.1 - - [05/Jan/2025 22:22:46] "GET /login HTTP/1.1" 200 -
+2025-01-05 22:22:46 - INFO - 127.0.0.1 - - [05/Jan/2025 22:22:46] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-01-05 22:22:50 - INFO - 127.0.0.1 - - [05/Jan/2025 22:22:50] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-01-05 22:22:50 - INFO - 127.0.0.1 - - [05/Jan/2025 22:22:50] "GET /landing HTTP/1.1" 200 -
+2025-01-05 22:22:52 - INFO - 127.0.0.1 - - [05/Jan/2025 22:22:52] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:23:00 - INFO - ¿ªÊ¼Í¬²½Êý¾Ý¿âµ½GitHub
+2025-01-05 22:23:00 - ERROR - Git add Ê§°Ü: fatal: not a git repository (or any of the parent directories): .git
+
+2025-01-05 22:23:00 - INFO - 127.0.0.1 - - [05/Jan/2025 22:23:00] "[32mPOST /edit_blood_pressure/4 HTTP/1.1[0m" 302 -
+2025-01-05 22:23:00 - INFO - 127.0.0.1 - - [05/Jan/2025 22:23:00] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:24:23 - INFO -  * Detected change in 'D:\\PythonSpace\\projectoldlu2\\app.py', reloading
+2025-01-05 22:24:24 - WARNING -  * Debugger is active!
+2025-01-05 22:24:24 - INFO -  * Debugger PIN: 780-676-183
+2025-01-05 22:24:32 - INFO - 127.0.0.1 - - [05/Jan/2025 22:24:32] "[32mPOST /edit_blood_pressure/4 HTTP/1.1[0m" 302 -
+2025-01-05 22:24:32 - INFO - 127.0.0.1 - - [05/Jan/2025 22:24:32] "GET /login HTTP/1.1" 200 -
+2025-01-05 22:24:34 - INFO - 127.0.0.1 - - [05/Jan/2025 22:24:34] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-01-05 22:24:34 - INFO - 127.0.0.1 - - [05/Jan/2025 22:24:34] "GET /landing HTTP/1.1" 200 -
+2025-01-05 22:24:35 - INFO - 127.0.0.1 - - [05/Jan/2025 22:24:35] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:24:42 - INFO - ¿ªÊ¼Í¬²½Êý¾Ý¿âµ½GitHub
+2025-01-05 22:24:42 - INFO - ³õÊ¼»¯Git²Ö¿â
+2025-01-05 22:24:43 - ERROR - Git push Ê§°Ü: remote: Not Found
+fatal: repository 'https://github.com/flyingpig2019/https://github.com/flyingpig2019/oldlu.git/' not found
+
+2025-01-05 22:24:43 - INFO - 127.0.0.1 - - [05/Jan/2025 22:24:43] "[32mPOST /edit_blood_pressure/4 HTTP/1.1[0m" 302 -
+2025-01-05 22:24:43 - INFO - 127.0.0.1 - - [05/Jan/2025 22:24:43] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:29:30 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2025-01-05 22:29:30 - INFO - [33mPress CTRL+C to quit[0m
+2025-01-05 22:29:30 - INFO -  * Restarting with stat
+2025-01-05 22:29:31 - WARNING -  * Debugger is active!
+2025-01-05 22:29:31 - INFO -  * Debugger PIN: 780-676-183
+2025-01-05 22:29:40 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:40] "[32mGET /blood_pressure_detail HTTP/1.1[0m" 302 -
+2025-01-05 22:29:40 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:40] "GET /login HTTP/1.1" 200 -
+2025-01-05 22:29:40 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:40] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-01-05 22:29:42 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:42] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-01-05 22:29:42 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:42] "GET /landing HTTP/1.1" 200 -
+2025-01-05 22:29:42 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:42] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-01-05 22:29:43 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:43] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:29:50 - INFO - ¿ªÊ¼Í¬²½Êý¾Ý¿âµ½GitHub
+2025-01-05 22:29:52 - ERROR - Git push Ê§°Ü: remote: Not Found
+fatal: repository 'https://github.com/flyingpig2019/https://github.com/flyingpig2019/oldlu.git/' not found
+
+2025-01-05 22:29:52 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:52] "[32mPOST /edit_blood_pressure/4 HTTP/1.1[0m" 302 -
+2025-01-05 22:29:52 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:52] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:29:52 - INFO - 127.0.0.1 - - [05/Jan/2025 22:29:52] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-01-05 22:31:44 - INFO -  * Detected change in 'D:\\PythonSpace\\projectoldlu2\\app.py', reloading
+2025-01-05 22:31:44 - INFO -  * Restarting with stat
+2025-01-05 22:31:45 - WARNING -  * Debugger is active!
+2025-01-05 22:31:45 - INFO -  * Debugger PIN: 780-676-183
+2025-01-05 22:31:55 - INFO - 127.0.0.1 - - [05/Jan/2025 22:31:55] "[32mPOST /edit_blood_pressure/4 HTTP/1.1[0m" 302 -
+2025-01-05 22:31:55 - INFO - 127.0.0.1 - - [05/Jan/2025 22:31:55] "GET /login HTTP/1.1" 200 -
+2025-01-05 22:31:55 - INFO - 127.0.0.1 - - [05/Jan/2025 22:31:55] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-01-05 22:31:58 - INFO - 127.0.0.1 - - [05/Jan/2025 22:31:58] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-01-05 22:31:58 - INFO - 127.0.0.1 - - [05/Jan/2025 22:31:58] "GET /landing HTTP/1.1" 200 -
+2025-01-05 22:32:00 - INFO - 127.0.0.1 - - [05/Jan/2025 22:32:00] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:32:08 - INFO - ¿ªÊ¼Í¬²½Êý¾Ý¿âµ½GitHub
+2025-01-05 22:32:09 - INFO - Êý¾Ý¿âÍ¬²½³É¹¦
+2025-01-05 22:32:09 - INFO - 127.0.0.1 - - [05/Jan/2025 22:32:09] "[32mPOST /edit_blood_pressure/4 HTTP/1.1[0m" 302 -
+2025-01-05 22:32:09 - INFO - 127.0.0.1 - - [05/Jan/2025 22:32:09] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:33:31 - INFO - 127.0.0.1 - - [05/Jan/2025 22:33:31] "GET /landing HTTP/1.1" 200 -
+2025-01-05 22:33:45 - INFO - ¿ªÊ¼Í¬²½Êý¾Ý¿âµ½GitHub
+2025-01-05 22:33:47 - INFO - Êý¾Ý¿âÍ¬²½³É¹¦
+2025-01-05 22:33:47 - INFO - 127.0.0.1 - - [05/Jan/2025 22:33:47] "[32mPOST /add_blood_pressure HTTP/1.1[0m" 302 -
+2025-01-05 22:33:47 - INFO - 127.0.0.1 - - [05/Jan/2025 22:33:47] "GET /landing HTTP/1.1" 200 -
+2025-01-05 22:33:58 - INFO - ¿ªÊ¼Í¬²½Êý¾Ý¿âµ½GitHub
+2025-01-05 22:34:00 - INFO - Êý¾Ý¿âÍ¬²½³É¹¦
+2025-01-05 22:34:00 - INFO - 127.0.0.1 - - [05/Jan/2025 22:34:00] "[32mPOST /add_blood_pressure HTTP/1.1[0m" 302 -
+2025-01-05 22:34:00 - INFO - 127.0.0.1 - - [05/Jan/2025 22:34:00] "GET /landing HTTP/1.1" 200 -
+2025-01-05 22:34:00 - INFO - 127.0.0.1 - - [05/Jan/2025 22:34:00] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-01-05 22:34:01 - INFO - 127.0.0.1 - - [05/Jan/2025 22:34:01] "GET /blood_pressure_detail HTTP/1.1" 200 -
+2025-01-05 22:36:48 - INFO -  * Detected change in 'D:\\PythonSpace\\projectoldlu2\\app.py', reloading
+2025-01-05 22:36:48 - INFO -  * Restarting with stat

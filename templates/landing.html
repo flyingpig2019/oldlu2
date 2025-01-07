@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - 健康监测系统{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="page-header">
+            <div class="container">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-tachometer-alt me-2"></i>健康监测面板
+                    </h1>
+                    <a href="{{ url_for('sync_database') }}" class="btn btn-primary" 
+                       onclick="return confirm('确定要同步数据库吗？这将会覆盖本地数据。')">
+                        <i class="fas fa-sync-alt me-2"></i>同步数据库
+                    </a>
+                </div>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show mt-3" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- 药物记录卡片 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h4><i class="fas fa-pills me-2"></i>药物服用记录</h4>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_medicine_record') }}" method="POST">
+                    <div class="form-group mb-3">
+                        <label class="form-label">日期</label>
+                        <input type="date" class="form-control" name="date" value="{{ current_date }}" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" name="medicine_taken" id="medicineTaken">
+                        <label class="form-check-label" for="medicineTaken">今日已服药</label>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-check me-2"></i>提交记录
+                        </button>
+                        <a href="{{ url_for('medicine_detail') }}" class="btn btn-info">
+                            <i class="fas fa-chart-line me-2"></i>查看详情
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 签到记录卡片 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h4><i class="fas fa-clipboard-check me-2"></i>护工签到/签退</h4>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_checkin_record') }}" method="POST">
+                    <div class="form-group mb-3">
+                        <label class="form-label">日期</label>
+                        <input type="date" class="form-control" name="date" value="{{ current_date }}" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="checkin" id="checkin">
+                                <label class="form-check-label" for="checkin">签到</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="checkin_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-sign-in-alt me-1"></i>提交签到
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="checkout" id="checkout">
+                                <label class="form-check-label" for="checkout">签退</label>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="checkout_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-sign-out-alt me-1"></i>提交签退
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-control" name="notes" rows="2"></textarea>
+                    </div>
+                    <div class="d-grid">
+                        <a href="{{ url_for('checkin_detail') }}" class="btn btn-info">
+                            <i class="fas fa-chart-bar me-2"></i>查看详情
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 血压监测卡片 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h4><i class="fas fa-heartbeat me-2"></i>血压监测</h4>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_blood_pressure') }}" method="POST">
+                    <div class="form-group mb-3">
+                        <label class="form-label">日期</label>
+                        <input type="date" class="form-control" name="date" value="{{ current_date }}" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_high" placeholder="早高压" 
+                                   value="{{ last_bp.morning_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_low" placeholder="早低压" 
+                                   value="{{ last_bp.morning_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="morning_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-sun me-1"></i>提交早间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_high" placeholder="晚高压" 
+                                   value="{{ last_bp.afternoon_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_low" placeholder="晚低压" 
+                                   value="{{ last_bp.afternoon_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="afternoon_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-moon me-1"></i>提交晚间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <a href="{{ url_for('blood_pressure_detail') }}" class="btn btn-info">
+                            <i class="fas fa-chart-line me-2"></i>查看详情
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 血压监测-毛 卡片 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h4><i class="fas fa-heartbeat me-2"></i>血压监测-毛</h4>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_blood_pressure2') }}" method="POST">
+                    <div class="form-group mb-3">
+                        <label class="form-label">日期</label>
+                        <input type="date" class="form-control" name="date" value="{{ current_date }}" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_high" placeholder="早高压" 
+                                   value="{{ last_bp2.morning_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_low" placeholder="早低压" 
+                                   value="{{ last_bp2.morning_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="morning_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-sun me-1"></i>提交早间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_high" placeholder="晚高压" 
+                                   value="{{ last_bp2.afternoon_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_low" placeholder="晚低压" 
+                                   value="{{ last_bp2.afternoon_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="afternoon_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-moon me-1"></i>提交晚间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <a href="{{ url_for('blood_pressure2_detail') }}" class="btn btn-info">
+                            <i class="fas fa-chart-line me-2"></i>查看详情
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 血压监测-祺 卡片 -->
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h4><i class="fas fa-heartbeat me-2"></i>血压监测-祺</h4>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('add_blood_pressure3') }}" method="POST">
+                    <div class="form-group mb-3">
+                        <label class="form-label">日期</label>
+                        <input type="date" class="form-control" name="date" value="{{ current_date }}" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_high" placeholder="早高压" 
+                                   value="{{ last_bp3.morning_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="morning_low" placeholder="早低压" 
+                                   value="{{ last_bp3.morning_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="morning_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-sun me-1"></i>提交早间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_high" placeholder="晚高压" 
+                                   value="{{ last_bp3.afternoon_high }}">
+                        </div>
+                        <div class="col">
+                            <input type="number" class="form-control" name="afternoon_low" placeholder="晚低压" 
+                                   value="{{ last_bp3.afternoon_low }}">
+                        </div>
+                        <div class="col">
+                            <button type="submit" name="afternoon_submit" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-moon me-1"></i>提交晚间
+                            </button>
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <a href="{{ url_for('blood_pressure3_detail') }}" class="btn btn-info">
+                            <i class="fas fa-chart-line me-2"></i>查看详情
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // 添加一些动画效果
+    document.querySelectorAll('.card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-5px)';
+            this.style.transition = 'transform 0.3s ease';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %} 

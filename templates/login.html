@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}登录 - 健康监测系统{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-4 col-lg-6 col-md-8">
+        <div class="card o-hidden border-0 shadow-lg my-5">
+            <div class="card-body p-0">
+                <div class="p-5">
+                    <div class="text-center mb-4">
+                        <i class="fas fa-heartbeat fa-3x text-primary mb-3"></i>
+                        <h1 class="h4 text-gray-900">欢迎回来！</h1>
+                        <p class="text-muted">请登录您的账户</p>
+                    </div>
+                    <form method="POST" action="{{ url_for('login') }}" class="user">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="username" name="username" placeholder="用户名" required>
+                            <label for="username">用户名</label>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input type="password" class="form-control" id="password" name="password" placeholder="密码" required>
+                            <label for="password">密码</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block w-100 mb-3">
+                            <i class="fas fa-sign-in-alt me-2"></i>登录
+                        </button>
+                    </form>
+                    {% if error %}
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
