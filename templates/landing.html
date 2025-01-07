@@ -11,10 +11,10 @@
                     <h1 class="h3 mb-0 text-gray-800">
                         <i class="fas fa-tachometer-alt me-2"></i>健康监测面板
                     </h1>
-                    <a href="{{ url_for('sync_database') }}" class="btn btn-primary" 
-                       onclick="return confirm('确定要同步数据库吗？这将会覆盖本地数据。')">
-                        <i class="fas fa-sync-alt me-2"></i>同步数据库
-                    </a>
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('upload_database') }}" class="btn btn-primary">上传数据库到GitHub</a>
+                        <a href="{{ url_for('download_database') }}" class="btn btn-warning">从GitHub下载数据库</a>
+                    </div>
                 </div>
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
