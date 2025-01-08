@@ -582,13 +582,22 @@ def blood_pressure_detail():
     records_with_daily = []
     for record in records:
         record_dict = dict(record)
+        # 修改日均值计算逻辑
         if record['morning_high'] and record['afternoon_high']:
             record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
+        elif record['morning_high']:
+            record_dict['daily_high'] = record['morning_high']
+        elif record['afternoon_high']:
+            record_dict['daily_high'] = record['afternoon_high']
         else:
             record_dict['daily_high'] = None
         
         if record['morning_low'] and record['afternoon_low']:
             record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
+        elif record['morning_low']:
+            record_dict['daily_low'] = record['morning_low']
+        elif record['afternoon_low']:
+            record_dict['daily_low'] = record['afternoon_low']
         else:
             record_dict['daily_low'] = None
         
@@ -644,152 +653,156 @@ def delete_blood_pressure(id):
 @app.route('/add_blood_pressure2', methods=['POST'])
 @login_required
 def add_blood_pressure2():
-    date = request.form['date']
-    day_of_week = get_chinese_weekday(date)
-    notes = request.form.get('notes', '')
-    
-    def calculate_risk(high, low):
-        if not high or not low:
-            return None
-        if high > 140 or low > 90:
-            return 'high risk'
-        elif high > 130 or low > 85:
-            return 'middle risk'
-        elif high > 120 or low > 80:
-            return 'low risk'
-        else:
-            return 'good'
-    
-    if 'morning_submit' in request.form:
-        morning_high = request.form.get('morning_high', 0)
-        morning_low = request.form.get('morning_low', 0)
+    try:
+        date = request.form['date']
+        day_of_week = get_chinese_weekday(date)
+        morning_high = request.form.get('morning_high', '')
+        morning_low = request.form.get('morning_low', '')
+        afternoon_high = request.form.get('afternoon_high', '')
+        afternoon_low = request.form.get('afternoon_low', '')
+        notes = request.form.get('notes', '')
+        risk = request.form.get('risk', '')
         
         db = get_db()
-        existing = db.execute('SELECT * FROM bloodpressure2_records WHERE date = ?', [date]).fetchone()
-        
-        risk = calculate_risk(int(morning_high), int(morning_low))
-        
-        if existing:
-            db.execute('''UPDATE bloodpressure2_records 
-                        SET morning_high = ?, morning_low = ?, notes = ?, risk = ?
-                        WHERE date = ?''', 
-                       [morning_high, morning_low, notes, risk, date])
-        else:
-            db.execute('''INSERT INTO bloodpressure2_records 
-                         (date, day_of_week, morning_high, morning_low, notes, risk)
-                         VALUES (?, ?, ?, ?, ?, ?)''',
-                        [date, day_of_week, morning_high, morning_low, notes, risk])
-        
+        db.execute('''INSERT INTO bloodpressure2_records 
+                     (date, day_of_week, morning_high, morning_low, 
+                      afternoon_high, afternoon_low, notes, risk)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                    [date, day_of_week, morning_high, morning_low, 
+                     afternoon_high, afternoon_low, notes, risk])
         db.commit()
         db.close()
-    
-    elif 'afternoon_submit' in request.form:
-        afternoon_high = request.form.get('afternoon_high', 0)
-        afternoon_low = request.form.get('afternoon_low', 0)
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('landing'))
+    except Exception as e:
+        print(f"添加血压记录时出错: {str(e)}")
+        return redirect(url_for('landing'))
+
+@app.route('/edit_blood_pressure2/<int:id>', methods=['POST'])
+@login_required
+def edit_blood_pressure2(id):
+    try:
+        morning_high = request.form.get('morning_high')
+        morning_low = request.form.get('morning_low')
+        afternoon_high = request.form.get('afternoon_high')
+        afternoon_low = request.form.get('afternoon_low')
+        notes = request.form.get('notes', '')
         
         db = get_db()
-        existing = db.execute('SELECT * FROM bloodpressure2_records WHERE date = ?', [date]).fetchone()
-        
-        if existing:
-            db.execute('''UPDATE bloodpressure2_records 
-                        SET afternoon_high = ?, afternoon_low = ?, notes = ?
-                        WHERE date = ?''', 
-                       [afternoon_high, afternoon_low, notes, date])
-        else:
-            db.execute('''INSERT INTO bloodpressure2_records 
-                         (date, day_of_week, afternoon_high, afternoon_low, notes)
-                         VALUES (?, ?, ?, ?, ?)''',
-                        [date, day_of_week, afternoon_high, afternoon_low, notes])
-        
+        db.execute('''UPDATE bloodpressure2_records 
+                     SET morning_high = ?, morning_low = ?,
+                         afternoon_high = ?, afternoon_low = ?,
+                         notes = ?
+                     WHERE id = ?''',
+                  [morning_high, morning_low, afternoon_high, 
+                   afternoon_low, notes, id])
         db.commit()
         db.close()
-    
-    push_db_updates()
-    return redirect(url_for('landing'))
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('blood_pressure2_detail'))
+    except Exception as e:
+        print(f"编辑血压记录时出错: {str(e)}")
+        return redirect(url_for('blood_pressure2_detail'))
+
+@app.route('/delete_blood_pressure2/<int:id>')
+@login_required
+def delete_blood_pressure2(id):
+    try:
+        db = get_db()
+        db.execute('DELETE FROM bloodpressure2_records WHERE id = ?', [id])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('blood_pressure2_detail'))
+    except Exception as e:
+        print(f"删除血压记录时出错: {str(e)}")
+        return redirect(url_for('blood_pressure2_detail'))
 
 @app.route('/add_blood_pressure3', methods=['POST'])
 @login_required
 def add_blood_pressure3():
-    date = request.form['date']
-    day_of_week = get_chinese_weekday(date)
-    notes = request.form.get('notes', '')
-    
-    def calculate_risk(high, low):
-        if not high or not low:
-            return None
-        if high > 140 or low > 90:
-            return 'high risk'
-        elif high > 130 or low > 85:
-            return 'middle risk'
-        elif high > 120 or low > 80:
-            return 'low risk'
-        else:
-            return 'good'
-    
-    if 'morning_submit' in request.form:
-        morning_high = request.form.get('morning_high', 0)
-        morning_low = request.form.get('morning_low', 0)
+    try:
+        date = request.form['date']
+        day_of_week = get_chinese_weekday(date)
+        morning_high = request.form.get('morning_high', '')
+        morning_low = request.form.get('morning_low', '')
+        afternoon_high = request.form.get('afternoon_high', '')
+        afternoon_low = request.form.get('afternoon_low', '')
+        notes = request.form.get('notes', '')
+        risk = request.form.get('risk', '')
         
         db = get_db()
-        existing = db.execute('SELECT * FROM bloodpressure3_records WHERE date = ?', [date]).fetchone()
-        
-        risk = calculate_risk(int(morning_high), int(morning_low))
-        
-        if existing:
-            # 计算日均值
-            daily_high = None
-            daily_low = None
-            if existing['afternoon_high'] and morning_high:
-                daily_high = round((int(morning_high) + existing['afternoon_high']) / 2, 1)
-            if existing['afternoon_low'] and morning_low:
-                daily_low = round((int(morning_low) + existing['afternoon_low']) / 2, 1)
-            today_average = f"{daily_high}/{daily_low}" if daily_high and daily_low else None
-            
-            db.execute('''UPDATE bloodpressure3_records 
-                         SET morning_high = ?, morning_low = ?, notes = ?, risk = ?, today_average = ?
-                         WHERE date = ?''', 
-                        [morning_high, morning_low, notes, risk, today_average, date])
-        else:
-            db.execute('''INSERT INTO bloodpressure3_records 
-                         (date, day_of_week, morning_high, morning_low, notes, risk)
-                         VALUES (?, ?, ?, ?, ?, ?)''',
-                        [date, day_of_week, morning_high, morning_low, notes, risk])
-        
+        db.execute('''INSERT INTO bloodpressure3_records 
+                     (date, day_of_week, morning_high, morning_low, 
+                      afternoon_high, afternoon_low, notes, risk)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                    [date, day_of_week, morning_high, morning_low, 
+                     afternoon_high, afternoon_low, notes, risk])
         db.commit()
         db.close()
-    
-    elif 'afternoon_submit' in request.form:
-        afternoon_high = request.form.get('afternoon_high', 0)
-        afternoon_low = request.form.get('afternoon_low', 0)
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('landing'))
+    except Exception as e:
+        print(f"添加血压记录时出错: {str(e)}")
+        return redirect(url_for('landing'))
+
+@app.route('/edit_blood_pressure3/<int:id>', methods=['POST'])
+@login_required
+def edit_blood_pressure3(id):
+    try:
+        morning_high = request.form.get('morning_high')
+        morning_low = request.form.get('morning_low')
+        afternoon_high = request.form.get('afternoon_high')
+        afternoon_low = request.form.get('afternoon_low')
+        notes = request.form.get('notes', '')
         
         db = get_db()
-        existing = db.execute('SELECT * FROM bloodpressure3_records WHERE date = ?', [date]).fetchone()
-        
-        if existing:
-            # 计算日均值
-            daily_high = None
-            daily_low = None
-            if existing['morning_high'] and afternoon_high:
-                daily_high = round((int(afternoon_high) + existing['morning_high']) / 2, 1)
-            if existing['morning_low'] and afternoon_low:
-                daily_low = round((int(afternoon_low) + existing['morning_low']) / 2, 1)
-            today_average = f"{daily_high}/{daily_low}" if daily_high and daily_low else None
-            
-            db.execute('''UPDATE bloodpressure3_records 
-                         SET afternoon_high = ?, afternoon_low = ?, notes = ?, today_average = ?
-                         WHERE date = ?''', 
-                        [afternoon_high, afternoon_low, notes, today_average, date])
-        else:
-            db.execute('''INSERT INTO bloodpressure3_records 
-                         (date, day_of_week, afternoon_high, afternoon_low, notes)
-                         VALUES (?, ?, ?, ?, ?)''',
-                        [date, day_of_week, afternoon_high, afternoon_low, notes])
-        
+        db.execute('''UPDATE bloodpressure3_records 
+                     SET morning_high = ?, morning_low = ?,
+                         afternoon_high = ?, afternoon_low = ?,
+                         notes = ?
+                     WHERE id = ?''',
+                  [morning_high, morning_low, afternoon_high, 
+                   afternoon_low, notes, id])
         db.commit()
         db.close()
-    
-    push_db_updates()
-    return redirect(url_for('landing'))
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('blood_pressure3_detail'))
+    except Exception as e:
+        print(f"编辑血压记录时出错: {str(e)}")
+        return redirect(url_for('blood_pressure3_detail'))
+
+@app.route('/delete_blood_pressure3/<int:id>')
+@login_required
+def delete_blood_pressure3(id):
+    try:
+        db = get_db()
+        db.execute('DELETE FROM bloodpressure3_records WHERE id = ?', [id])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('blood_pressure3_detail'))
+    except Exception as e:
+        print(f"删除血压记录时出错: {str(e)}")
+        return redirect(url_for('blood_pressure3_detail'))
 
 @app.route('/blood_pressure2_detail')
 @login_required
@@ -810,21 +823,22 @@ def blood_pressure2_detail():
     records_with_daily = []
     for record in records:
         record_dict = dict(record)
-        # 计算今日平均值
-        if record['morning_high'] and record['afternoon_high'] and record['morning_low'] and record['afternoon_low']:
-            daily_high = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-            daily_low = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-            record_dict['today_average'] = f"{daily_high}/{daily_low}"
-        else:
-            record_dict['today_average'] = None
-        
+        # 修改日均值计算逻辑
         if record['morning_high'] and record['afternoon_high']:
             record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
+        elif record['morning_high']:
+            record_dict['daily_high'] = record['morning_high']
+        elif record['afternoon_high']:
+            record_dict['daily_high'] = record['afternoon_high']
         else:
             record_dict['daily_high'] = None
         
         if record['morning_low'] and record['afternoon_low']:
             record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
+        elif record['morning_low']:
+            record_dict['daily_low'] = record['morning_low']
+        elif record['afternoon_low']:
+            record_dict['daily_low'] = record['afternoon_low']
         else:
             record_dict['daily_low'] = None
         
@@ -836,48 +850,6 @@ def blood_pressure2_detail():
                          records=records_with_daily,
                          current_page=page,
                          total_pages=total_pages)
-
-@app.route('/edit_blood_pressure2/<int:id>', methods=['POST'])
-@login_required
-def edit_blood_pressure2(id):
-    morning_high = request.form.get('morning_high')
-    morning_low = request.form.get('morning_low')
-    afternoon_high = request.form.get('afternoon_high')
-    afternoon_low = request.form.get('afternoon_low')
-    notes = request.form.get('notes', '')
-    
-    # 计算日均值
-    daily_high = None
-    daily_low = None
-    if morning_high and afternoon_high:
-        daily_high = round((int(morning_high) + int(afternoon_high)) / 2, 1)
-    if morning_low and afternoon_low:
-        daily_low = round((int(morning_low) + int(afternoon_low)) / 2, 1)
-    today_average = f"{daily_high}/{daily_low}" if daily_high and daily_low else None
-    
-    db = get_db()
-    db.execute('''UPDATE bloodpressure2_records 
-                  SET morning_high = ?, morning_low = ?,
-                      afternoon_high = ?, afternoon_low = ?,
-                      notes = ?, today_average = ?
-                  WHERE id = ?''',
-                [morning_high, morning_low, afternoon_high, afternoon_low, notes, today_average, id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('blood_pressure2_detail'))
-
-@app.route('/delete_blood_pressure2/<int:id>')
-@login_required
-def delete_blood_pressure2(id):
-    db = get_db()
-    db.execute('DELETE FROM bloodpressure2_records WHERE id = ?', [id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('blood_pressure2_detail'))
 
 @app.route('/blood_pressure3_detail')
 @login_required
@@ -898,13 +870,22 @@ def blood_pressure3_detail():
     records_with_daily = []
     for record in records:
         record_dict = dict(record)
+        # 修改日均值计算逻辑
         if record['morning_high'] and record['afternoon_high']:
             record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
+        elif record['morning_high']:
+            record_dict['daily_high'] = record['morning_high']
+        elif record['afternoon_high']:
+            record_dict['daily_high'] = record['afternoon_high']
         else:
             record_dict['daily_high'] = None
         
         if record['morning_low'] and record['afternoon_low']:
             record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
+        elif record['morning_low']:
+            record_dict['daily_low'] = record['morning_low']
+        elif record['afternoon_low']:
+            record_dict['daily_low'] = record['afternoon_low']
         else:
             record_dict['daily_low'] = None
         
@@ -916,48 +897,6 @@ def blood_pressure3_detail():
                          records=records_with_daily,
                          current_page=page,
                          total_pages=total_pages)
-
-@app.route('/edit_blood_pressure3/<int:id>', methods=['POST'])
-@login_required
-def edit_blood_pressure3(id):
-    morning_high = request.form.get('morning_high')
-    morning_low = request.form.get('morning_low')
-    afternoon_high = request.form.get('afternoon_high')
-    afternoon_low = request.form.get('afternoon_low')
-    notes = request.form.get('notes', '')
-    
-    # 计算日均值
-    daily_high = None
-    daily_low = None
-    if morning_high and afternoon_high:
-        daily_high = round((int(morning_high) + int(afternoon_high)) / 2, 1)
-    if morning_low and afternoon_low:
-        daily_low = round((int(morning_low) + int(afternoon_low)) / 2, 1)
-    today_average = f"{daily_high}/{daily_low}" if daily_high and daily_low else None
-    
-    db = get_db()
-    db.execute('''UPDATE bloodpressure3_records 
-                  SET morning_high = ?, morning_low = ?,
-                      afternoon_high = ?, afternoon_low = ?,
-                      notes = ?, today_average = ?
-                  WHERE id = ?''',
-                [morning_high, morning_low, afternoon_high, afternoon_low, notes, today_average, id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('blood_pressure3_detail'))
-
-@app.route('/delete_blood_pressure3/<int:id>')
-@login_required
-def delete_blood_pressure3(id):
-    db = get_db()
-    db.execute('DELETE FROM bloodpressure3_records WHERE id = ?', [id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('blood_pressure3_detail'))
 
 @app.route('/medicine_calendar')
 @login_required
