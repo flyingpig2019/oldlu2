@@ -221,30 +221,23 @@
                     <tr>
                         <td>{{ record.date }}</td>
                         <td>{{ record.day_of_week }}</td>
-                        <td class="blood-pressure-value">
-                            {% if record.morning_high and record.morning_low %}
-                                {{ record.morning_high }}/{{ record.morning_low }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td class="blood-pressure-value">
-                            {% if record.afternoon_high and record.afternoon_low %}
-                                {{ record.afternoon_high }}/{{ record.afternoon_low }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td class="blood-pressure-value">{{ record.today_average or '-' }}</td>
+                        <td>{{ record.morning_high }}</td>
+                        <td>{{ record.morning_low }}</td>
+                        <td>{{ record.afternoon_high }}</td>
+                        <td>{{ record.afternoon_low }}</td>
                         <td>
-                            <span class="badge badge-{{ 'danger' if record.risk == 'high risk' 
-                                                    else 'warning' if record.risk == 'middle risk'
-                                                    else 'info' if record.risk == 'low risk'
-                                                    else 'success' }}">
-                                {{ record.risk or '正常' }}
-                            </span>
+                            {% if record.daily_high is not none and record.daily_low is not none %}
+                                {{ record.daily_high }}/{{ record.daily_low }}
+                            {% elif record.daily_high is not none %}
+                                {{ record.daily_high }}/--
+                            {% elif record.daily_low is not none %}
+                                --/{{ record.daily_low }}
+                            {% else %}
+                                --/--
+                            {% endif %}
                         </td>
-                        <td>{{ record.notes or '无' }}</td>
+                        <td>{{ record.notes }}</td>
+                        <td>{{ record.risk }}</td>
                         <td class="action-buttons">
                             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ record.id }}">
                                 <i class="fas fa-edit"></i>

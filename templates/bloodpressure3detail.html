@@ -120,11 +120,13 @@
                     <tr>
                         <th>日期</th>
                         <th>星期</th>
-                        <th>早间血压</th>
-                        <th>晚间血压</th>
+                        <th>早间高压</th>
+                        <th>早间低压</th>
+                        <th>晚间高压</th>
+                        <th>晚间低压</th>
                         <th>今日平均</th>
-                        <th>风险等级</th>
                         <th>备注</th>
+                        <th>风险等级</th>
                         <th>操作</th>
                     </tr>
                 </thead>
@@ -133,37 +135,23 @@
                     <tr>
                         <td>{{ record.date }}</td>
                         <td>{{ record.day_of_week }}</td>
-                        <td class="blood-pressure-value">
-                            {% if record.morning_high and record.morning_low %}
-                                {{ record.morning_high }}/{{ record.morning_low }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td class="blood-pressure-value">
-                            {% if record.afternoon_high and record.afternoon_low %}
-                                {{ record.afternoon_high }}/{{ record.afternoon_low }}
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        <td class="blood-pressure-value">{{ record.today_average or '-' }}</td>
+                        <td>{{ record.morning_high }}</td>
+                        <td>{{ record.morning_low }}</td>
+                        <td>{{ record.afternoon_high }}</td>
+                        <td>{{ record.afternoon_low }}</td>
                         <td>
-                            <span class="risk-badge risk-{{ record.risk.split()[0] if record.risk else 'none' }}">
-                                {% if record.risk == 'good' %}
-                                    <i class="fas fa-check-circle me-1"></i>正常
-                                {% elif record.risk == 'low risk' %}
-                                    <i class="fas fa-info-circle me-1"></i>低风险
-                                {% elif record.risk == 'middle risk' %}
-                                    <i class="fas fa-exclamation-circle me-1"></i>中风险
-                                {% elif record.risk == 'high risk' %}
-                                    <i class="fas fa-exclamation-triangle me-1"></i>高风险
-                                {% else %}
-                                    <i class="fas fa-question-circle me-1"></i>未知
-                                {% endif %}
-                            </span>
+                            {% if record.daily_high is not none and record.daily_low is not none %}
+                                {{ record.daily_high }}/{{ record.daily_low }}
+                            {% elif record.daily_high is not none %}
+                                {{ record.daily_high }}/--
+                            {% elif record.daily_low is not none %}
+                                --/{{ record.daily_low }}
+                            {% else %}
+                                --/--
+                            {% endif %}
                         </td>
-                        <td>{{ record.notes or '无' }}</td>
+                        <td>{{ record.notes }}</td>
+                        <td>{{ record.risk }}</td>
                         <td class="action-buttons">
                             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editModal{{ record.id }}">
                                 <i class="fas fa-edit"></i>
