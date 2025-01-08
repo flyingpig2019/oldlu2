@@ -33,23 +33,53 @@
 <script>
     const ctx = document.getElementById('bloodPressureChart').getContext('2d');
     new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: {{ dates|tojson }},
             datasets: [
                 {
-                    label: '日均高压',
-                    data: {{ daily_high|tojson }},
-                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    label: '晨间高压',
+                    data: {{ morning_high|tojson }},
                     borderColor: 'rgb(255, 99, 132)',
-                    borderWidth: 1
+                    backgroundColor: 'rgb(255, 99, 132)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
                 },
                 {
-                    label: '日均低压',
-                    data: {{ daily_low|tojson }},
-                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    label: '晨间低压',
+                    data: {{ morning_low|tojson }},
                     borderColor: 'rgb(75, 192, 192)',
-                    borderWidth: 1
+                    backgroundColor: 'rgb(75, 192, 192)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
+                },
+                {
+                    label: '晚间高压',
+                    data: {{ afternoon_high|tojson }},
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgb(54, 162, 235)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
+                },
+                {
+                    label: '晚间低压',
+                    data: {{ afternoon_low|tojson }},
+                    borderColor: 'rgb(153, 102, 255)',
+                    backgroundColor: 'rgb(153, 102, 255)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
                 }
             ]
         },
@@ -58,7 +88,7 @@
             plugins: {
                 title: {
                     display: true,
-                    text: '血压趋势图（日均值）'
+                    text: '血压趋势图'
                 },
                 tooltip: {
                     mode: 'index',
