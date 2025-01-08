@@ -58,6 +58,27 @@
 
     <!-- 统计卡片 -->
     <div class="row">
+        <!-- 日均血压 -->
+        <div class="col-xl-12 col-md-12 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                日均血压
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ averages.daily_high }}/{{ averages.daily_low }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-xl-3 col-md-6 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
@@ -139,56 +160,7 @@
         </div>
     </div>
 
-    <!-- 日均值卡片 -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">日均血压</h6>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-xl-6 col-md-6 mb-4">
-                    <div class="card border-left-danger shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                        日均收缩压
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                        {{ averages.daily_high }}
-                                    </div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-heartbeat fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-6 col-md-6 mb-4">
-                    <div class="card border-left-purple shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-purple text-uppercase mb-1">
-                                        日均舒张压
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                        {{ averages.daily_low }}
-                                    </div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-heart fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    <!-- 统计说明卡片 -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">统计说明</h6>

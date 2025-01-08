@@ -2,285 +2,112 @@
 
 {% block title %}血压趋势图 - 健康监测系统{% endblock %}
 
-{% block extra_css %}
-<style>
-    .chart-container {
-        background: white;
-        border-radius: .35rem;
-        box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.15);
-        padding: 1.25rem;
-        margin-bottom: 1.5rem;
-        min-height: 600px;
-        width: 100%;
-    }
-
-    .chart-wrapper {
-        position: relative;
-        height: 450px;
-        width: 100%;
-        margin-top: 1rem;
-    }
-
-    .chart-header {
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid #e3e6f0;
-    }
-
-    .chart-title {
-        color: #4e73df;
-        font-weight: 700;
-        margin: 0;
-        font-size: 1rem;
-    }
-
-    .chart-description {
-        color: #858796;
-        margin-top: 0.5rem;
-        font-size: 0.875rem;
-    }
-
-    .legend-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .legend-item {
-        display: flex;
-        align-items: center;
-        font-size: 0.875rem;
-        color: #5a5c69;
-    }
-
-    .legend-color {
-        width: 12px;
-        height: 12px;
-        border-radius: 2px;
-        margin-right: 0.5rem;
-    }
-
-    .date-picker-container {
-        background: white;
-        border-radius: .35rem;
-        box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,.15);
-        padding: 1.25rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .date-picker-header {
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid #e3e6f0;
-    }
-
-    .date-picker-title {
-        color: #4e73df;
-        font-weight: 700;
-        margin: 0;
-        font-size: 1rem;
-    }
-
-    .date-picker-form {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        align-items: flex-end;
-    }
-
-    .date-picker-group {
-        flex: 1;
-        min-width: 200px;
-    }
-
-    .date-picker-label {
-        font-weight: 600;
-        color: #5a5c69;
-        margin-bottom: 0.5rem;
-        display: block;
-    }
-
-    .date-picker-input {
-        position: relative;
-    }
-
-    .date-picker-input .input-group-text {
-        background-color: #4e73df;
-        color: white;
-        border: none;
-    }
-
-    .date-picker-button {
-        min-width: 120px;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="container-fluid">
-    <!-- 页面标题和按钮组 -->
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-chart-line me-2"></i>血压趋势图
-        </h1>
-        <div class="d-flex align-items-center">
-            <a href="{{ url_for('blood_pressure_detail') }}" class="btn btn-primary">
-                <i class="fas fa-arrow-left me-2"></i>返回详情
-            </a>
-        </div>
-    </div>
-
-    <!-- 日期选择器 -->
-    <div class="date-picker-container">
-        <div class="date-picker-header">
-            <h6 class="date-picker-title">
-                <i class="fas fa-calendar-alt me-2"></i>选择日期范围
-            </h6>
-        </div>
-        <form method="get" class="date-picker-form">
-            <div class="date-picker-group">
-                <label class="date-picker-label">开始日期</label>
-                <div class="input-group date-picker-input">
-                    <span class="input-group-text">
-                        <i class="fas fa-calendar"></i>
-                    </span>
-                    <input type="date" class="form-control" name="start_date" 
-                           value="{{ start_date }}" required>
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="page-header">
+            <div class="container">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h3 mb-0 text-gray-800">
+                        <i class="fas fa-chart-line me-2"></i>血压趋势图
+                    </h1>
+                    <a href="{{ url_for('blood_pressure_detail') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left me-2"></i>返回详情
+                    </a>
                 </div>
             </div>
-            <div class="date-picker-group">
-                <label class="date-picker-label">结束日期</label>
-                <div class="input-group date-picker-input">
-                    <span class="input-group-text">
-                        <i class="fas fa-calendar"></i>
-                    </span>
-                    <input type="date" class="form-control" name="end_date" 
-                           value="{{ end_date }}" required>
-                </div>
-            </div>
-            <div class="date-picker-button">
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-search me-2"></i>查看趋势
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- 血压趋势图 -->
-    <div class="chart-container">
-        <div class="chart-header">
-            <h6 class="chart-title">
-                <i class="fas fa-heartbeat me-2"></i>血压趋势
-            </h6>
-            <p class="chart-description">显示最近记录的血压变化趋势，包括收缩压和舒张压的晨间和晚间测量值</p>
-        </div>
-        <div class="legend-container">
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #4e73df;"></div>
-                <span>晨间高压</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #1cc88a;"></div>
-                <span>晚间高压</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #36b9cc;"></div>
-                <span>晨间低压</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background-color: #f6c23e;"></div>
-                <span>晚间低压</span>
-            </div>
-        </div>
-        <div class="chart-wrapper">
-            <canvas id="bloodPressureChart"></canvas>
         </div>
     </div>
 </div>
 
+<div class="card shadow mb-4">
+    <div class="card-body">
+        <canvas id="bloodPressureChart"></canvas>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    var ctx = document.getElementById('bloodPressureChart').getContext('2d');
-    var myChart = new Chart(ctx, {
+    const ctx = document.getElementById('bloodPressureChart').getContext('2d');
+    new Chart(ctx, {
         type: 'line',
         data: {
             labels: {{ dates|tojson }},
             datasets: [
                 {
-                    label: '晨间收缩压',
+                    label: '晨间高压',
                     data: {{ morning_high|tojson }},
-                    borderColor: '#4e73df',
-                    backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                    tension: 0.1,
-                    fill: true
+                    borderColor: 'rgb(255, 99, 132)',
+                    backgroundColor: 'rgb(255, 99, 132)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
                 },
                 {
-                    label: '晚间收缩压',
-                    data: {{ afternoon_high|tojson }},
-                    borderColor: '#1cc88a',
-                    backgroundColor: 'rgba(28, 200, 138, 0.1)',
-                    tension: 0.1,
-                    fill: true
-                },
-                {
-                    label: '晨间舒张压',
+                    label: '晨间低压',
                     data: {{ morning_low|tojson }},
-                    borderColor: '#36b9cc',
-                    backgroundColor: 'rgba(54, 185, 204, 0.1)',
-                    tension: 0.1,
-                    fill: true
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgb(75, 192, 192)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
                 },
                 {
-                    label: '晚间舒张压',
+                    label: '晚间高压',
+                    data: {{ afternoon_high|tojson }},
+                    borderColor: 'rgb(54, 162, 235)',
+                    backgroundColor: 'rgb(54, 162, 235)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
+                },
+                {
+                    label: '晚间低压',
                     data: {{ afternoon_low|tojson }},
-                    borderColor: '#f6c23e',
-                    backgroundColor: 'rgba(246, 194, 62, 0.1)',
-                    tension: 0.1,
-                    fill: true
+                    borderColor: 'rgb(153, 102, 255)',
+                    backgroundColor: 'rgb(153, 102, 255)',
+                    tension: 0,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    showLine: false
                 }
             ]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false,
-            layout: {
-                padding: {
-                    top: 20,
-                    right: 20,
-                    bottom: 20,
-                    left: 20
-                }
-            },
             plugins: {
                 title: {
                     display: true,
-                    text: '血压变化趋势图'
+                    text: '血压趋势图'
                 },
-                legend: {
-                    position: 'top',
-                    labels: {
-                        padding: 20
-                    }
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
                 }
             },
             scales: {
                 y: {
                     beginAtZero: false,
-                    min: 40,
-                    max: 180,
-                    grid: {
-                        drawBorder: false
-                    }
-                },
-                x: {
-                    grid: {
-                        drawBorder: false
-                    }
+                    suggestedMin: 40,
+                    suggestedMax: 200
                 }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
             }
         }
     });
-});
 </script>
 {% endblock %} 

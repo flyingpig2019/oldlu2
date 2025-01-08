@@ -545,70 +545,43 @@ def add_blood_pressure():
         notes = request.form.get('notes', '')
         risk = request.form.get('risk', '')
         
+        # 计算日均值
+        daily_high = daily_low = None
+        try:
+            if morning_high and afternoon_high:
+                daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
+            elif morning_high:
+                daily_high = float(morning_high)
+            elif afternoon_high:
+                daily_high = float(afternoon_high)
+                
+            if morning_low and afternoon_low:
+                daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
+            elif morning_low:
+                daily_low = float(morning_low)
+            elif afternoon_low:
+                daily_low = float(afternoon_low)
+            
+            # 设置 today_average
+            today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+        except (ValueError, TypeError):
+            today_average = ""
+        
         db = get_db()
         db.execute('''INSERT INTO bloodpressure_records 
                      (date, day_of_week, morning_high, morning_low, 
-                      afternoon_high, afternoon_low, notes, risk)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                      afternoon_high, afternoon_low, notes, risk, today_average)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     [date, day_of_week, morning_high, morning_low, 
-                     afternoon_high, afternoon_low, notes, risk])
+                     afternoon_high, afternoon_low, notes, risk, today_average])
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('landing'))
     except Exception as e:
         print(f"添加血压记录时出错: {str(e)}")
         return redirect(url_for('landing'))
-
-@app.route('/blood_pressure_detail')
-@login_required
-def blood_pressure_detail():
-    page = request.args.get('page', 1, type=int)
-    per_page = 10
-    
-    db = get_db()
-    total = db.execute('SELECT COUNT(*) FROM bloodpressure_records').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
-    
-    offset = (page - 1) * per_page
-    records = db.execute('''SELECT * FROM bloodpressure_records 
-                           ORDER BY date DESC LIMIT ? OFFSET ?''',
-                        [per_page, offset]).fetchall()
-    
-    # 将记录转换为字典列表，并计算日均值
-    records_with_daily = []
-    for record in records:
-        record_dict = dict(record)
-        # 修改日均值计算逻辑
-        if record['morning_high'] and record['afternoon_high']:
-            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-        elif record['morning_high']:
-            record_dict['daily_high'] = record['morning_high']
-        elif record['afternoon_high']:
-            record_dict['daily_high'] = record['afternoon_high']
-        else:
-            record_dict['daily_high'] = None
-        
-        if record['morning_low'] and record['afternoon_low']:
-            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-        elif record['morning_low']:
-            record_dict['daily_low'] = record['morning_low']
-        elif record['afternoon_low']:
-            record_dict['daily_low'] = record['afternoon_low']
-        else:
-            record_dict['daily_low'] = None
-        
-        records_with_daily.append(record_dict)
-    
-    db.close()
-    
-    return render_template('bloodpressuredetail.html',
-                         records=records_with_daily,
-                         current_page=page,
-                         total_pages=total_pages)
 
 @app.route('/edit_blood_pressure/<int:id>', methods=['POST'])
 @login_required
@@ -620,20 +593,37 @@ def edit_blood_pressure(id):
         afternoon_low = request.form.get('afternoon_low')
         notes = request.form.get('notes', '')
         
+        # 计算日均值
+        daily_high = daily_low = None
+        if morning_high and afternoon_high:
+            daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
+        elif morning_high:
+            daily_high = float(morning_high)
+        elif afternoon_high:
+            daily_high = float(afternoon_high)
+            
+        if morning_low and afternoon_low:
+            daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
+        elif morning_low:
+            daily_low = float(morning_low)
+        elif afternoon_low:
+            daily_low = float(afternoon_low)
+        
+        # 设置 today_average
+        today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+        
         db = get_db()
         db.execute('''UPDATE bloodpressure_records 
                      SET morning_high = ?, morning_low = ?,
                          afternoon_high = ?, afternoon_low = ?,
-                         notes = ?
+                         notes = ?, today_average = ?
                      WHERE id = ?''',
                   [morning_high, morning_low, afternoon_high, 
-                   afternoon_low, notes, id])
+                   afternoon_low, notes, today_average, id])
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('blood_pressure_detail'))
     except Exception as e:
         print(f"编辑血压记录时出错: {str(e)}")
@@ -663,19 +653,39 @@ def add_blood_pressure2():
         notes = request.form.get('notes', '')
         risk = request.form.get('risk', '')
         
+        # 计算日均值
+        daily_high = daily_low = None
+        try:
+            if morning_high and afternoon_high:
+                daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
+            elif morning_high:
+                daily_high = float(morning_high)
+            elif afternoon_high:
+                daily_high = float(afternoon_high)
+                
+            if morning_low and afternoon_low:
+                daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
+            elif morning_low:
+                daily_low = float(morning_low)
+            elif afternoon_low:
+                daily_low = float(afternoon_low)
+            
+            # 设置 today_average
+            today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+        except (ValueError, TypeError):
+            today_average = ""
+        
         db = get_db()
         db.execute('''INSERT INTO bloodpressure2_records 
                      (date, day_of_week, morning_high, morning_low, 
-                      afternoon_high, afternoon_low, notes, risk)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                      afternoon_high, afternoon_low, notes, risk, today_average)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     [date, day_of_week, morning_high, morning_low, 
-                     afternoon_high, afternoon_low, notes, risk])
+                     afternoon_high, afternoon_low, notes, risk, today_average])
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('landing'))
     except Exception as e:
         print(f"添加血压记录时出错: {str(e)}")
@@ -691,20 +701,37 @@ def edit_blood_pressure2(id):
         afternoon_low = request.form.get('afternoon_low')
         notes = request.form.get('notes', '')
         
+        # 计算日均值
+        daily_high = daily_low = None
+        if morning_high and afternoon_high:
+            daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
+        elif morning_high:
+            daily_high = float(morning_high)
+        elif afternoon_high:
+            daily_high = float(afternoon_high)
+            
+        if morning_low and afternoon_low:
+            daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
+        elif morning_low:
+            daily_low = float(morning_low)
+        elif afternoon_low:
+            daily_low = float(afternoon_low)
+        
+        # 设置 today_average
+        today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+        
         db = get_db()
         db.execute('''UPDATE bloodpressure2_records 
                      SET morning_high = ?, morning_low = ?,
                          afternoon_high = ?, afternoon_low = ?,
-                         notes = ?
+                         notes = ?, today_average = ?
                      WHERE id = ?''',
                   [morning_high, morning_low, afternoon_high, 
-                   afternoon_low, notes, id])
+                   afternoon_low, notes, today_average, id])
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('blood_pressure2_detail'))
     except Exception as e:
         print(f"编辑血压记录时出错: {str(e)}")
@@ -740,19 +767,39 @@ def add_blood_pressure3():
         notes = request.form.get('notes', '')
         risk = request.form.get('risk', '')
         
+        # 计算日均值
+        daily_high = daily_low = None
+        try:
+            if morning_high and afternoon_high:
+                daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
+            elif morning_high:
+                daily_high = float(morning_high)
+            elif afternoon_high:
+                daily_high = float(afternoon_high)
+                
+            if morning_low and afternoon_low:
+                daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
+            elif morning_low:
+                daily_low = float(morning_low)
+            elif afternoon_low:
+                daily_low = float(afternoon_low)
+            
+            # 设置 today_average
+            today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+        except (ValueError, TypeError):
+            today_average = ""
+        
         db = get_db()
         db.execute('''INSERT INTO bloodpressure3_records 
                      (date, day_of_week, morning_high, morning_low, 
-                      afternoon_high, afternoon_low, notes, risk)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                      afternoon_high, afternoon_low, notes, risk, today_average)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     [date, day_of_week, morning_high, morning_low, 
-                     afternoon_high, afternoon_low, notes, risk])
+                     afternoon_high, afternoon_low, notes, risk, today_average])
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('landing'))
     except Exception as e:
         print(f"添加血压记录时出错: {str(e)}")
@@ -768,20 +815,37 @@ def edit_blood_pressure3(id):
         afternoon_low = request.form.get('afternoon_low')
         notes = request.form.get('notes', '')
         
+        # 计算日均值
+        daily_high = daily_low = None
+        if morning_high and afternoon_high:
+            daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
+        elif morning_high:
+            daily_high = float(morning_high)
+        elif afternoon_high:
+            daily_high = float(afternoon_high)
+            
+        if morning_low and afternoon_low:
+            daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
+        elif morning_low:
+            daily_low = float(morning_low)
+        elif afternoon_low:
+            daily_low = float(afternoon_low)
+        
+        # 设置 today_average
+        today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+        
         db = get_db()
         db.execute('''UPDATE bloodpressure3_records 
                      SET morning_high = ?, morning_low = ?,
                          afternoon_high = ?, afternoon_low = ?,
-                         notes = ?
+                         notes = ?, today_average = ?
                      WHERE id = ?''',
                   [morning_high, morning_low, afternoon_high, 
-                   afternoon_low, notes, id])
+                   afternoon_low, notes, today_average, id])
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('blood_pressure3_detail'))
     except Exception as e:
         print(f"编辑血压记录时出错: {str(e)}")
@@ -1038,21 +1102,14 @@ def download_income_report():
 @app.route('/blood_pressure_chart')
 @login_required
 def blood_pressure_chart():
-    # 获取日期范围参数，默认最近30天
-    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
-    start_date = request.args.get('start_date', 
-                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
-    
     db = get_db()
     records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low 
+        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
         FROM bloodpressure_records 
-        WHERE date BETWEEN ? AND ?
         ORDER BY date ASC
-    ''', [start_date, end_date]).fetchall()
+    ''').fetchall()
     db.close()
     
-    # 准备图表数据
     dates = []
     morning_high = []
     morning_low = []
@@ -1060,20 +1117,24 @@ def blood_pressure_chart():
     afternoon_low = []
     
     for record in records:
-        dates.append(record['date'])
-        morning_high.append(record['morning_high'])
-        morning_low.append(record['morning_low'])
-        afternoon_high.append(record['afternoon_high'])
-        afternoon_low.append(record['afternoon_low'])
+        try:
+            if any([record['morning_high'], record['morning_low'], 
+                   record['afternoon_high'], record['afternoon_low']]):
+                dates.append(record['date'])
+                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
+                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
+                afternoon_high.append(float(record['afternoon_high']) if record['afternoon_high'] else None)
+                afternoon_low.append(float(record['afternoon_low']) if record['afternoon_low'] else None)
+        except (ValueError, TypeError) as e:
+            print(f"处理记录出错: {str(e)}")
+            continue
     
     return render_template('bloodpressurechart.html',
                          dates=dates,
                          morning_high=morning_high,
                          morning_low=morning_low,
                          afternoon_high=afternoon_high,
-                         afternoon_low=afternoon_low,
-                         start_date=start_date,
-                         end_date=end_date)
+                         afternoon_low=afternoon_low)
 
 @app.route('/blood_pressure_print')
 @login_required
@@ -1373,21 +1434,14 @@ def blood_pressure_average():
 @app.route('/blood_pressure2_chart')
 @login_required
 def blood_pressure2_chart():
-    # 获取日期范围参数，默认最近30天
-    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
-    start_date = request.args.get('start_date', 
-                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
-    
     db = get_db()
     records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low 
+        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
         FROM bloodpressure2_records 
-        WHERE date BETWEEN ? AND ?
         ORDER BY date ASC
-    ''', [start_date, end_date]).fetchall()
+    ''').fetchall()
     db.close()
     
-    # 准备图表数据
     dates = []
     morning_high = []
     morning_low = []
@@ -1395,39 +1449,36 @@ def blood_pressure2_chart():
     afternoon_low = []
     
     for record in records:
-        dates.append(record['date'])
-        morning_high.append(record['morning_high'])
-        morning_low.append(record['morning_low'])
-        afternoon_high.append(record['afternoon_high'])
-        afternoon_low.append(record['afternoon_low'])
+        try:
+            if any([record['morning_high'], record['morning_low'], 
+                   record['afternoon_high'], record['afternoon_low']]):
+                dates.append(record['date'])
+                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
+                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
+                afternoon_high.append(float(record['afternoon_high']) if record['afternoon_high'] else None)
+                afternoon_low.append(float(record['afternoon_low']) if record['afternoon_low'] else None)
+        except (ValueError, TypeError) as e:
+            print(f"处理记录出错: {str(e)}")
+            continue
     
     return render_template('bloodpressure2chart.html',
                          dates=dates,
                          morning_high=morning_high,
                          morning_low=morning_low,
                          afternoon_high=afternoon_high,
-                         afternoon_low=afternoon_low,
-                         start_date=start_date,
-                         end_date=end_date)
+                         afternoon_low=afternoon_low)
 
 @app.route('/blood_pressure3_chart')
 @login_required
 def blood_pressure3_chart():
-    # 获取日期范围参数，默认最近30天
-    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
-    start_date = request.args.get('start_date', 
-                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
-    
     db = get_db()
     records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low 
+        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
         FROM bloodpressure3_records 
-        WHERE date BETWEEN ? AND ?
         ORDER BY date ASC
-    ''', [start_date, end_date]).fetchall()
+    ''').fetchall()
     db.close()
     
-    # 准备图表数据
     dates = []
     morning_high = []
     morning_low = []
@@ -1435,20 +1486,24 @@ def blood_pressure3_chart():
     afternoon_low = []
     
     for record in records:
-        dates.append(record['date'])
-        morning_high.append(record['morning_high'])
-        morning_low.append(record['morning_low'])
-        afternoon_high.append(record['afternoon_high'])
-        afternoon_low.append(record['afternoon_low'])
+        try:
+            if any([record['morning_high'], record['morning_low'], 
+                   record['afternoon_high'], record['afternoon_low']]):
+                dates.append(record['date'])
+                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
+                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
+                afternoon_high.append(float(record['afternoon_high']) if record['afternoon_high'] else None)
+                afternoon_low.append(float(record['afternoon_low']) if record['afternoon_low'] else None)
+        except (ValueError, TypeError) as e:
+            print(f"处理记录出错: {str(e)}")
+            continue
     
     return render_template('bloodpressure3chart.html',
                          dates=dates,
                          morning_high=morning_high,
                          morning_low=morning_low,
                          afternoon_high=afternoon_high,
-                         afternoon_low=afternoon_low,
-                         start_date=start_date,
-                         end_date=end_date)
+                         afternoon_low=afternoon_low)
 
 @app.route('/blood_pressure2_average')
 @login_required
@@ -1805,6 +1860,147 @@ def blood_pressure3_print_selected():
         as_attachment=True,
         download_name=f'血压记录_祺_{start_date}至{end_date}.xlsx'
     )
+
+@app.route('/blood_pressure_detail')
+@login_required
+def blood_pressure_detail():
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    
+    db = get_db()
+    total = db.execute('SELECT COUNT(*) FROM bloodpressure_records').fetchone()[0]
+    total_pages = (total + per_page - 1) // per_page
+    
+    offset = (page - 1) * per_page
+    records = db.execute('''SELECT * FROM bloodpressure_records 
+                           ORDER BY date DESC LIMIT ? OFFSET ?''',
+                        [per_page, offset]).fetchall()
+    
+    # 将记录转换为字典列表，并计算日均值
+    records_with_daily = []
+    for record in records:
+        record_dict = dict(record)
+        # 修改日均值计算逻辑
+        if record['morning_high'] and record['afternoon_high']:
+            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
+        elif record['morning_high']:
+            record_dict['daily_high'] = record['morning_high']
+        elif record['afternoon_high']:
+            record_dict['daily_high'] = record['afternoon_high']
+        else:
+            record_dict['daily_high'] = None
+        
+        if record['morning_low'] and record['afternoon_low']:
+            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
+        elif record['morning_low']:
+            record_dict['daily_low'] = record['morning_low']
+        elif record['afternoon_low']:
+            record_dict['daily_low'] = record['afternoon_low']
+        else:
+            record_dict['daily_low'] = None
+        
+        records_with_daily.append(record_dict)
+    
+    db.close()
+    
+    return render_template('bloodpressuredetail.html',
+                         records=records_with_daily,
+                         current_page=page,
+                         total_pages=total_pages)
+
+@app.route('/update_today_average')
+@login_required
+def update_today_average():
+    try:
+        db = get_db()
+        
+        # 更新 bloodpressure_records
+        records = db.execute('SELECT id, morning_high, morning_low, afternoon_high, afternoon_low FROM bloodpressure_records').fetchall()
+        for record in records:
+            daily_high = daily_low = None
+            try:
+                if record['morning_high'] and record['afternoon_high']:
+                    daily_high = round((float(record['morning_high']) + float(record['afternoon_high'])) / 2, 1)
+                elif record['morning_high']:
+                    daily_high = float(record['morning_high'])
+                elif record['afternoon_high']:
+                    daily_high = float(record['afternoon_high'])
+                    
+                if record['morning_low'] and record['afternoon_low']:
+                    daily_low = round((float(record['morning_low']) + float(record['afternoon_low'])) / 2, 1)
+                elif record['morning_low']:
+                    daily_low = float(record['morning_low'])
+                elif record['afternoon_low']:
+                    daily_low = float(record['afternoon_low'])
+                
+                today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+                db.execute('UPDATE bloodpressure_records SET today_average = ? WHERE id = ?', 
+                          [today_average, record['id']])
+            except (ValueError, TypeError):
+                continue
+        
+        # 更新 bloodpressure2_records
+        records = db.execute('SELECT id, morning_high, morning_low, afternoon_high, afternoon_low FROM bloodpressure2_records').fetchall()
+        for record in records:
+            daily_high = daily_low = None
+            try:
+                if record['morning_high'] and record['afternoon_high']:
+                    daily_high = round((float(record['morning_high']) + float(record['afternoon_high'])) / 2, 1)
+                elif record['morning_high']:
+                    daily_high = float(record['morning_high'])
+                elif record['afternoon_high']:
+                    daily_high = float(record['afternoon_high'])
+                    
+                if record['morning_low'] and record['afternoon_low']:
+                    daily_low = round((float(record['morning_low']) + float(record['afternoon_low'])) / 2, 1)
+                elif record['morning_low']:
+                    daily_low = float(record['morning_low'])
+                elif record['afternoon_low']:
+                    daily_low = float(record['afternoon_low'])
+                
+                today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+                db.execute('UPDATE bloodpressure2_records SET today_average = ? WHERE id = ?', 
+                          [today_average, record['id']])
+            except (ValueError, TypeError):
+                continue
+        
+        # 更新 bloodpressure3_records
+        records = db.execute('SELECT id, morning_high, morning_low, afternoon_high, afternoon_low FROM bloodpressure3_records').fetchall()
+        for record in records:
+            daily_high = daily_low = None
+            try:
+                if record['morning_high'] and record['afternoon_high']:
+                    daily_high = round((float(record['morning_high']) + float(record['afternoon_high'])) / 2, 1)
+                elif record['morning_high']:
+                    daily_high = float(record['morning_high'])
+                elif record['afternoon_high']:
+                    daily_high = float(record['afternoon_high'])
+                    
+                if record['morning_low'] and record['afternoon_low']:
+                    daily_low = round((float(record['morning_low']) + float(record['afternoon_low'])) / 2, 1)
+                elif record['morning_low']:
+                    daily_low = float(record['morning_low'])
+                elif record['afternoon_low']:
+                    daily_low = float(record['afternoon_low'])
+                
+                today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
+                db.execute('UPDATE bloodpressure3_records SET today_average = ? WHERE id = ?', 
+                          [today_average, record['id']])
+            except (ValueError, TypeError):
+                continue
+        
+        db.commit()
+        db.close()
+        
+        # 上传更新后的数据库
+        force_upload_to_github()
+        
+        flash('所有记录的日均值已更新', 'success')
+        return redirect(url_for('landing'))
+    except Exception as e:
+        print(f"更新日均值时出错: {str(e)}")
+        flash('更新日均值时出错', 'error')
+        return redirect(url_for('landing'))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
