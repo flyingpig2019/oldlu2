@@ -427,25 +427,27 @@ def checkin_detail():
 @app.route('/edit_checkin_record/<int:id>', methods=['POST'])
 @login_required
 def edit_checkin_record(id):
-    checkin = 'checkin' in request.form
-    checkout = 'checkout' in request.form
-    notes = request.form.get('notes', '')
-    # 如果签退，必须保持签到状态为True
-    if checkout:
-        checkin = True
-    # 如果签到和签退都完成，设置收入为75
-    income = 75 if checkin and checkout else 0
-    
-    db = get_db()
-    db.execute('''UPDATE checkin_records 
-                  SET checkin = ?, checkout = ?, notes = ?, income = ?
-                  WHERE id = ?''',
-                [checkin, checkout, notes, income, id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('checkin_detail'))
+    try:
+        checkin = 'checkin' in request.form
+        checkout = 'checkout' in request.form
+        notes = request.form.get('notes', '')
+        income = request.form.get('income', 0)
+        
+        db = get_db()
+        db.execute('''UPDATE checkin_records 
+                     SET checkin = ?, checkout = ?, notes = ?, income = ?
+                     WHERE id = ?''',
+                  [checkin, checkout, notes, income, id])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('checkin_detail'))
+    except Exception as e:
+        print(f"编辑签到记录时出错: {str(e)}")
+        return redirect(url_for('checkin_detail'))
 
 @app.route('/delete_checkin_record/<int:id>')
 @login_required
@@ -602,24 +604,31 @@ def blood_pressure_detail():
 @app.route('/edit_blood_pressure/<int:id>', methods=['POST'])
 @login_required
 def edit_blood_pressure(id):
-    morning_high = request.form.get('morning_high')
-    morning_low = request.form.get('morning_low')
-    afternoon_high = request.form.get('afternoon_high')
-    afternoon_low = request.form.get('afternoon_low')
-    notes = request.form.get('notes', '')
-    
-    db = get_db()
-    db.execute('''UPDATE bloodpressure_records 
-                  SET morning_high = ?, morning_low = ?,
-                      afternoon_high = ?, afternoon_low = ?,
-                      notes = ?
-                  WHERE id = ?''',
-                [morning_high, morning_low, afternoon_high, afternoon_low, notes, id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('blood_pressure_detail'))
+    try:
+        morning_high = request.form.get('morning_high')
+        morning_low = request.form.get('morning_low')
+        afternoon_high = request.form.get('afternoon_high')
+        afternoon_low = request.form.get('afternoon_low')
+        notes = request.form.get('notes', '')
+        
+        db = get_db()
+        db.execute('''UPDATE bloodpressure_records 
+                     SET morning_high = ?, morning_low = ?,
+                         afternoon_high = ?, afternoon_low = ?,
+                         notes = ?
+                     WHERE id = ?''',
+                  [morning_high, morning_low, afternoon_high, 
+                   afternoon_low, notes, id])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        return redirect(url_for('blood_pressure_detail'))
+    except Exception as e:
+        print(f"编辑血压记录时出错: {str(e)}")
+        return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/delete_blood_pressure/<int:id>')
 @login_required
