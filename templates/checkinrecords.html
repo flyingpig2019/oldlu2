@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}签到记录 - 健康监测系统{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">签到记录</h1>
+        <a href="{{ url_for('landing') }}" class="btn btn-primary">
+            <i class="fas fa-arrow-left"></i> 返回首页
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>签到状态</th>
+                            <th>签出状态</th>
+                            <th>收入</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in records %}
+                        <tr>
+                            <td>{{ record['date'] }}</td>
+                            <td>{{ record['checkin_time'] }}</td>
+                            <td>{{ record['checkout_time'] }}</td>
+                            <td>{{ record['income'] }}</td>
+                            <td>{{ record['notes'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 分页控件 -->
+            {% if total_pages > 1 %}
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if current_page > 1 %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('checkin_records', page=current_page-1) }}">上一页</a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page in range(1, total_pages + 1) %}
+                    <li class="page-item {% if page == current_page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('checkin_records', page=page) }}">{{ page }}</a>
+                    </li>
+                    {% endfor %}
+                    
+                    {% if current_page < total_pages %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('checkin_records', page=current_page+1) }}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

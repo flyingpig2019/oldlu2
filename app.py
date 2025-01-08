@@ -385,7 +385,9 @@ def add_checkin_record():
         checkin = 'checkin' in request.form
         checkout = 'checkout' in request.form
         notes = request.form.get('notes', '')
-        income = request.form.get('income', 0)
+        
+        # 如果签到和签出都完成，自动设置收入为75
+        income = 75 if checkin and checkout else request.form.get('income', 0)
         
         db = get_db()
         db.execute('''INSERT INTO checkin_records 
@@ -410,17 +412,70 @@ def checkin_detail():
     per_page = 10
     
     db = get_db()
-    total = db.execute('SELECT COUNT(*) FROM checkin_records').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
+    # 修改查询以按日期分组，获取每天最新的状态，并包含 id
+    records = db.execute('''
+        WITH daily_records AS (
+            SELECT 
+                id,
+                date,
+                day_of_week,
+                MAX(checkin) as checkin_status,
+                MAX(checkout) as checkout_status,
+                GROUP_CONCAT(notes, ' ') as all_notes
+            FROM (
+                SELECT 
+                    id,
+                    date,
+                    day_of_week,
+                    checkin,
+                    checkout,
+                    notes
+                FROM checkin_records
+                ORDER BY id DESC
+            )
+            GROUP BY date
+        )
+        SELECT 
+            id,
+            date,
+            day_of_week,
+            checkin_status,
+            checkout_status,
+            CASE 
+                WHEN checkin_status = 1 AND checkout_status = 1 THEN 75 
+                ELSE 0 
+            END as total_income,
+            all_notes
+        FROM daily_records
+        ORDER BY date DESC
+        LIMIT ? OFFSET ?
+    ''', [per_page, (page - 1) * per_page]).fetchall()
     
-    offset = (page - 1) * per_page
-    records = db.execute('''SELECT * FROM checkin_records 
-                           ORDER BY date DESC LIMIT ? OFFSET ?''',
-                        [per_page, offset]).fetchall()
+    # 获取总记录数（按天计算）
+    total = db.execute('''
+        SELECT COUNT(DISTINCT date) 
+        FROM checkin_records
+    ''').fetchone()[0]
+    
+    # 转换记录格式
+    formatted_records = []
+    for record in records:
+        formatted_records.append({
+            'id': record['id'],
+            'date': record['date'],
+            'day_of_week': record['day_of_week'],
+            'checkin': record['checkin_status'],
+            'checkout': record['checkout_status'],
+            'income': record['total_income'],
+            'notes': record['all_notes'].strip() if record['all_notes'] else ''
+        })
+    
     db.close()
     
+    total_pages = (total + per_page - 1) // per_page
+    
     return render_template('checkindetail.html',
-                         records=records,
+                         records=formatted_records,
                          current_page=page,
                          total_pages=total_pages)
 
@@ -431,7 +486,9 @@ def edit_checkin_record(id):
         checkin = 'checkin' in request.form
         checkout = 'checkout' in request.form
         notes = request.form.get('notes', '')
-        income = request.form.get('income', 0)
+        
+        # 如果签到和签出都完成，自动设置收入为75
+        income = 75 if checkin and checkout else request.form.get('income', 0)
         
         db = get_db()
         db.execute('''UPDATE checkin_records 
@@ -452,29 +509,61 @@ def edit_checkin_record(id):
 @app.route('/delete_checkin_record/<int:id>')
 @login_required
 def delete_checkin_record(id):
-    db = get_db()
-    db.execute('DELETE FROM checkin_records WHERE id = ?', [id])
-    db.commit()
-    db.close()
-    
-    push_db_updates()
-    return redirect(url_for('checkin_detail'))
+    try:
+        db = get_db()
+        # 首先获取要删除记录的日期
+        date = db.execute('SELECT date FROM checkin_records WHERE id = ?', [id]).fetchone()['date']
+        
+        # 删除该日期的所有记录
+        db.execute('DELETE FROM checkin_records WHERE date = ?', [date])
+        db.commit()
+        db.close()
+        
+        # 自动上传到 GitHub
+        force_upload_to_github()
+        
+        flash('成功删除该天的所有签到记录', 'success')
+        return redirect(url_for('checkin_detail'))
+    except Exception as e:
+        print(f"删除签到记录时出错: {str(e)}")
+        flash('删除记录时出错', 'error')
+        return redirect(url_for('checkin_detail'))
 
 @app.route('/checkin_calendar')
 @login_required
 def checkin_calendar():
     current_month = datetime.now()
+    # 使用 calendar.monthcalendar 获取月历数据
     calendar_data = monthcalendar(current_month.year, current_month.month)
+    
+    # 获取月份第一天是星期几（0是星期一，6是星期日）
+    first_day = datetime(current_month.year, current_month.month, 1)
+    first_weekday = first_day.weekday()
+    
+    # 调整日历数据，使星期日显示在正确位置
+    adjusted_calendar = []
+    for week in calendar_data:
+        # 创建新的一周，将星期日移到最后
+        adjusted_week = week[:-1]  # 去掉最后一个元素（星期日）
+        adjusted_week.append(week[-1])  # 将星期日添加到最后
+        adjusted_calendar.append(adjusted_week)
     
     # 获取上个月和下个月的日期
     prev_month = (current_month.replace(day=1) - timedelta(days=1)).replace(day=1)
     next_month = (current_month.replace(day=28) + timedelta(days=4)).replace(day=1)
     
     db = get_db()
-    records = db.execute('''SELECT date, checkin, checkout 
-                           FROM checkin_records 
-                           WHERE strftime('%Y-%m', date) = ?''',
-                        [current_month.strftime('%Y-%m')]).fetchall()
+    # 修改查询以获取每天的签到签出状态
+    records = db.execute('''
+        SELECT 
+            date,
+            MAX(checkin) as has_checkin,
+            MAX(checkout) as has_checkout,
+            SUM(income) as total_income
+        FROM checkin_records 
+        WHERE strftime('%Y-%m', date) = ?
+        GROUP BY date
+    ''', [current_month.strftime('%Y-%m')]).fetchall()
     
     # 获取本月的收入统计
     monthly_income = db.execute('''
@@ -485,11 +574,17 @@ def checkin_calendar():
     db.close()
     
     # 转换记录为字典以便快速查找
-    record_dict = {r['date']: {'checkin': r['checkin'], 'checkout': r['checkout']} 
-                  for r in records}
+    record_dict = {}
+    for r in records:
+        record_dict[r['date']] = {
+            'checkin': r['has_checkin'],
+            'checkout': r['has_checkout'],
+            'income': r['total_income'] or 0,
+            'completed': r['has_checkin'] and r['has_checkout']
+        }
     
     return render_template('checkincalendardetail.html',
-                         calendar=calendar_data,
+                         calendar=adjusted_calendar,
                          current_month=current_month,
                          prev_month=prev_month,
                          next_month=next_month,
@@ -2001,6 +2096,64 @@ def update_today_average():
         print(f"更新日均值时出错: {str(e)}")
         flash('更新日均值时出错', 'error')
         return redirect(url_for('landing'))
+
+@app.route('/checkin_records')
+@login_required
+def checkin_records():
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    
+    db = get_db()
+    # 修改查询以按日期分组，获取每天最新的状态
+    records = db.execute('''
+        SELECT 
+            date,
+            day_of_week,
+            MAX(checkin) as checkin_status,
+            MAX(checkout) as checkout_status,
+            SUM(income) as total_income,
+            GROUP_CONCAT(notes, ' ') as all_notes
+        FROM (
+            SELECT 
+                date,
+                day_of_week,
+                checkin,
+                checkout,
+                income,
+                notes
+            FROM checkin_records
+            ORDER BY id DESC
+        )
+        GROUP BY date
+        ORDER BY date DESC
+        LIMIT ? OFFSET ?
+    ''', [per_page, (page - 1) * per_page]).fetchall()
+    
+    # 获取总记录数（按天计算）
+    total = db.execute('''
+        SELECT COUNT(DISTINCT date) 
+        FROM checkin_records
+    ''').fetchone()[0]
+    
+    # 转换记录格式
+    formatted_records = []
+    for record in records:
+        formatted_records.append({
+            'date': record['date'],
+            'checkin_time': '已签到' if record['checkin_status'] else '未签到',
+            'checkout_time': '已签出' if record['checkout_status'] else '未签出',
+            'income': record['total_income'] or 0,
+            'notes': record['all_notes'].strip() if record['all_notes'] else ''
+        })
+    
+    db.close()
+    
+    total_pages = (total + per_page - 1) // per_page
+    
+    return render_template('checkinrecords.html',
+                         records=formatted_records,
+                         current_page=page,
+                         total_pages=total_pages)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
