@@ -1,40 +1,98 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 
-{% block title %}登录 - 健康监测系统{% endblock %}
+{% block header %}
+<h1>{% block title %}登录{% endblock %}</h1>
+{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-xl-4 col-lg-6 col-md-8">
-        <div class="card o-hidden border-0 shadow-lg my-5">
-            <div class="card-body p-0">
-                <div class="p-5">
-                    <div class="text-center mb-4">
-                        <i class="fas fa-heartbeat fa-3x text-primary mb-3"></i>
-                        <h1 class="h4 text-gray-900">欢迎回来！</h1>
-                        <p class="text-muted">请登录您的账户</p>
-                    </div>
-                    <form method="POST" action="{{ url_for('login') }}" class="user">
-                        <div class="form-floating mb-3">
-                            <input type="text" class="form-control" id="username" name="username" placeholder="用户名" required>
-                            <label for="username">用户名</label>
-                        </div>
-                        <div class="form-floating mb-3">
-                            <input type="password" class="form-control" id="password" name="password" placeholder="密码" required>
-                            <label for="password">密码</label>
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-block w-100 mb-3">
-                            <i class="fas fa-sign-in-alt me-2"></i>登录
-                        </button>
-                    </form>
-                    {% if error %}
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                    {% endif %}
-                </div>
+<div class="content login-page">
+    <div class="login-card">
+        <h2>登录</h2>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <form method="post">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" name="username" id="username" required>
             </div>
-        </div>
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" name="password" id="password" required>
+            </div>
+            <button type="submit" class="btn">登录</button>
+        </form>
     </div>
 </div>
+
+<style>
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 60vh;
+}
+.login-card {
+    background: white;
+    padding: 40px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 400px;
+}
+.login-card h2 {
+    margin: 0 0 20px 0;
+    color: #333;
+    text-align: center;
+}
+.alert {
+    margin-bottom: 20px;
+    padding: 10px;
+    border-radius: 4px;
+    text-align: center;
+}
+.alert.error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+.alert.success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #333;
+}
+.form-group input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+.btn {
+    width: 100%;
+    padding: 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+.btn:hover {
+    background: #45a049;
+}
+</style>
 {% endblock %} 

@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block header %}
+<h1>{% block title %}血压监测平均值{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+    <form id="date-range-form" class="date-range-form">
+        <div class="form-group">
+            <label>开始日期:</label>
+            <input type="date" name="start_date" value="{{ start_date }}" required>
+        </div>
+        <div class="form-group">
+            <label>结束日期:</label>
+            <input type="date" name="end_date" value="{{ end_date }}" required>
+        </div>
+        <button type="submit">查看平均值</button>
+    </form>
+
+    <div class="stats-container">
+        <div class="stats-card">
+            <h3>统计周期: {{ days }}天</h3>
+            <div class="risk-level">
+                <span class="risk-{{ risk }}">总体风险等级: {{ risk }}</span>
+            </div>
+            <table>
+                <tr>
+                    <th></th>
+                    <th>收缩压</th>
+                    <th>舒张压</th>
+                </tr>
+                <tr>
+                    <td>晨间平均</td>
+                    <td>{{ averages.morning_high }}</td>
+                    <td>{{ averages.morning_low }}</td>
+                </tr>
+                <tr>
+                    <td>晚间平均</td>
+                    <td>{{ averages.night_high }}</td>
+                    <td>{{ averages.night_low }}</td>
+                </tr>
+                <tr>
+                    <td>日均值</td>
+                    <td>{{ averages.daily_high }}</td>
+                    <td>{{ averages.daily_low }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('date-range-form').onsubmit = function(e) {
+    e.preventDefault();
+    const start_date = this.start_date.value;
+    const end_date = this.end_date.value;
+    window.location.href = `?start_date=${start_date}&end_date=${end_date}`;
+};
+</script>
+
+<style>
+.date-range-form {
+    max-width: 400px;
+    margin: 20px auto;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+.form-group {
+    margin-bottom: 15px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+}
+.form-group input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+button {
+    width: 100%;
+    padding: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+button:hover {
+    background-color: #45a049;
+}
+.stats-container {
+    margin-top: 30px;
+}
+.stats-card {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #fff;
+}
+.stats-card h3 {
+    margin-top: 0;
+    color: #333;
+}
+.risk-level {
+    margin: 15px 0;
+    font-size: 1.2em;
+}
+.risk-良好 { color: green; }
+.risk-中等 { color: orange; }
+.risk-偏高 { color: red; }
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+th, td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #ddd;
+}
+th {
+    background-color: #f5f5f5;
+}
+</style>
+{% endblock %} 

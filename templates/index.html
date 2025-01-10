@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block header %}
+<h1>{% block title %}健康监测系统{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+    <div class="dashboard">
+        <div class="card">
+            <h2>血压监测</h2>
+            <div class="links">
+                <a href="{{ url_for('blood_pressure_detail') }}" class="link-item">
+                    <span class="title">血压监测</span>
+                    <span class="description">查看和记录血压数据</span>
+                </a>
+                <a href="{{ url_for('blood_pressure2_detail') }}" class="link-item">
+                    <span class="title">血压监测-毛</span>
+                    <span class="description">查看和记录血压数据-毛</span>
+                </a>
+                <a href="{{ url_for('blood_pressure3_detail') }}" class="link-item">
+                    <span class="title">血压监测-祺</span>
+                    <span class="description">查看和记录血压数据-祺</span>
+                </a>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>签到记录</h2>
+            <div class="links">
+                <a href="{{ url_for('checkin_calendar', year=current_year, month=current_month) }}" class="link-item">
+                    <span class="title">签到日历</span>
+                    <span class="description">查看签到记录日历</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+.card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.card h2 {
+    margin: 0 0 20px 0;
+    color: #333;
+    font-size: 1.5rem;
+}
+.links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.link-item {
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    border-radius: 6px;
+    background: #f8f9fa;
+    text-decoration: none;
+    color: #333;
+    transition: all 0.3s ease;
+}
+.link-item:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+}
+.link-item .title {
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-bottom: 5px;
+}
+.link-item .description {
+    font-size: 0.9rem;
+    color: #666;
+}
+</style>
+{% endblock %} 

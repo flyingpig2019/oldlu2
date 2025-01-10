@@ -1,212 +1,184 @@
 {% extends "base.html" %}
 
-{% block title %}血压平均值 - 健康监测系统{% endblock %}
+{% block title %}血压平均值统计-祺{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- 页面标题和按钮组 -->
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">血压平均值统计</h1>
-        <div class="d-flex align-items-center">
-            <a href="{{ url_for('blood_pressure3_print_range') }}" class="btn btn-warning me-2">
-                <i class="fas fa-print"></i> 打印记录
-            </a>
-            <a href="{{ url_for('blood_pressure3_detail') }}" class="btn btn-primary">
-                <i class="fas fa-arrow-left"></i> 返回详情
-            </a>
+<div class="page-header">
+    <h1 class="page-title">血压平均值统计</h1>
+    <div class="page-actions">
+        <a href="{{ url_for('blood_pressure3_detail') }}" class="btn btn-secondary">
+            <span class="material-icons">arrow_back</span>
+            返回详情
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">选择日期范围</h2>
+    </div>
+    <div class="card-body">
+        <form id="dateRangeForm" class="date-range-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">开始日期</label>
+                    <input type="date" id="start_date" name="start_date" value="{{ start_date }}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">结束日期</label>
+                    <input type="date" id="end_date" name="end_date" value="{{ end_date }}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="material-icons">search</span>
+                        查询
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="card stat-card">
+        <div class="stat-header">
+            <span class="material-icons">wb_sunny</span>
+            <h3>晨间血压平均值</h3>
+        </div>
+        <div class="stat-body">
+            <div class="stat-value">{{ averages.morning_high }}/{{ averages.morning_low }}</div>
+            <div class="stat-label">mmHg</div>
         </div>
     </div>
 
-    <!-- 日期选择器卡片 -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex align-items-center">
-            <i class="fas fa-calendar-alt me-2 text-primary"></i>
-            <h6 class="m-0 font-weight-bold text-primary">选择统计日期范围</h6>
+    <div class="card stat-card">
+        <div class="stat-header">
+            <span class="material-icons">nights_stay</span>
+            <h3>晚间血压平均值</h3>
         </div>
-        <div class="card-body">
-            <form method="get" class="row align-items-center">
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label class="form-label fw-bold">开始日期</label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="fas fa-calendar"></i>
-                            </span>
-                            <input type="date" class="form-control" name="start_date" 
-                                   value="{{ start_date }}" required>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label class="form-label fw-bold">结束日期</label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="fas fa-calendar"></i>
-                            </span>
-                            <input type="date" class="form-control" name="end_date" 
-                                   value="{{ end_date }}" required>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="form-group">
-                        <label class="form-label">&nbsp;</label>
-                        <button type="submit" class="btn btn-primary d-block w-100">
-                            <i class="fas fa-search me-2"></i>查询统计
-                        </button>
-                    </div>
-                </div>
-            </form>
+        <div class="stat-body">
+            <div class="stat-value">{{ averages.night_high }}/{{ averages.night_low }}</div>
+            <div class="stat-label">mmHg</div>
         </div>
     </div>
 
-    <!-- 日期范围提示 -->
-    <div class="alert alert-info mb-4">
-        <i class="fas fa-info-circle me-2"></i>
-        当前显示 {{ start_date }} 至 {{ end_date }} 的统计数据，共 {{ days }} 天。
-    </div>
-
-    <!-- 统计卡片 -->
-    <div class="row">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                晨间收缩压平均值
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ averages.morning_high }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-heartbeat fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div class="card stat-card">
+        <div class="stat-header">
+            <span class="material-icons">analytics</span>
+            <h3>日均血压平均值</h3>
         </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                晨间舒张压平均值
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ averages.morning_low }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-heart fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                晚间收缩压平均值
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ averages.afternoon_high }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-heartbeat fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                晚间舒张压平均值
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                {{ averages.afternoon_low }}
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-heart fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="stat-body">
+            <div class="stat-value">{{ averages.daily_high }}/{{ averages.daily_low }}</div>
+            <div class="stat-label">mmHg</div>
         </div>
     </div>
 
-    <!-- 日均值卡片 -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">日均血压</h6>
+    <div class="card stat-card">
+        <div class="stat-header">
+            <span class="material-icons">assessment</span>
+            <h3>总体风险等级</h3>
         </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-xl-6 col-md-6 mb-4">
-                    <div class="card border-left-danger shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                        日均收缩压
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                        {{ averages.daily_high }}
-                                    </div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-heartbeat fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="col-xl-6 col-md-6 mb-4">
-                    <div class="card border-left-purple shadow h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-purple text-uppercase mb-1">
-                                        日均舒张压
-                                    </div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                        {{ averages.daily_low }}
-                                    </div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-heart fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">统计说明</h6>
-        </div>
-        <div class="card-body">
-            <p>以上数据基于最近 {{ days }} 天的记录计算得出。</p>
+        <div class="stat-body">
+            <div class="stat-value risk-{{ risk }}">{{ risk }}</div>
+            <div class="stat-label">共{{ days }}天记录</div>
         </div>
     </div>
 </div>
+
+<style>
+.date-range-form {
+    padding: 1rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.form-group {
+    flex: 1;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.stat-card {
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+
+.stat-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+}
+
+.stat-header .material-icons {
+    font-size: 1.5rem;
+}
+
+.stat-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.stat-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.risk-良好 { color: var(--success-color); }
+.risk-中等 { color: var(--warning-color); }
+.risk-偏高 { color: var(--danger-color); }
+
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .form-group {
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+document.getElementById('dateRangeForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    
+    if (startDate && endDate) {
+        window.location.href = `{{ url_for('blood_pressure3_average') }}?start_date=${startDate}&end_date=${endDate}`;
+    }
+});
+</script>
 {% endblock %} 

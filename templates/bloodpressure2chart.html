@@ -1,113 +1,79 @@
 {% extends "base.html" %}
 
-{% block title %}血压趋势图-毛 - 健康监测系统{% endblock %}
+{% block title %}血压监测图表-毛{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="page-header">
-            <div class="container">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h1 class="h3 mb-0 text-gray-800">
-                        <i class="fas fa-chart-line me-2"></i>血压趋势图-毛
-                    </h1>
-                    <a href="{{ url_for('blood_pressure2_detail') }}" class="btn btn-primary">
-                        <i class="fas fa-arrow-left me-2"></i>返回详情
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="content">
+    <div id="chart"></div>
 </div>
 
-<div class="card shadow mb-4">
-    <div class="card-body">
-        <canvas id="bloodPressureChart"></canvas>
-    </div>
-</div>
-
-{% endblock %}
-
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script>
-    const ctx = document.getElementById('bloodPressureChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: {{ dates|tojson }},
-            datasets: [
-                {
-                    label: '晨间高压',
-                    data: {{ morning_high|tojson }},
-                    borderColor: 'rgb(255, 99, 132)',
-                    backgroundColor: 'rgb(255, 99, 132)',
-                    tension: 0,
-                    fill: false,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    showLine: false
-                },
-                {
-                    label: '晨间低压',
-                    data: {{ morning_low|tojson }},
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgb(75, 192, 192)',
-                    tension: 0,
-                    fill: false,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    showLine: false
-                },
-                {
-                    label: '晚间高压',
-                    data: {{ afternoon_high|tojson }},
-                    borderColor: 'rgb(54, 162, 235)',
-                    backgroundColor: 'rgb(54, 162, 235)',
-                    tension: 0,
-                    fill: false,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    showLine: false
-                },
-                {
-                    label: '晚间低压',
-                    data: {{ afternoon_low|tojson }},
-                    borderColor: 'rgb(153, 102, 255)',
-                    backgroundColor: 'rgb(153, 102, 255)',
-                    tension: 0,
-                    fill: false,
-                    pointRadius: 4,
-                    pointHoverRadius: 6,
-                    showLine: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                title: {
-                    display: true,
-                    text: '血压趋势图'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    suggestedMin: 40,
-                    suggestedMax: 200
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
-        }
-    });
+const dates = {{ dates|tojson }};
+const morningHigh = {{ morning_high|tojson }};
+const morningLow = {{ morning_low|tojson }};
+const nightHigh = {{ night_high|tojson }};
+const nightLow = {{ night_low|tojson }};
+const averages = {{ averages|tojson }};
+
+const traces = [
+    {
+        name: '晨间收缩压',
+        x: dates,
+        y: morningHigh,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#1f77b4'}
+    },
+    {
+        name: '晨间舒张压',
+        x: dates,
+        y: morningLow,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#2ca02c'}
+    },
+    {
+        name: '晚间收缩压',
+        x: dates,
+        y: nightHigh,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#ff7f0e'}
+    },
+    {
+        name: '晚间舒张压',
+        x: dates,
+        y: nightLow,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#d62728'}
+    }
+];
+
+const layout = {
+    title: '血压趋势图',
+    xaxis: {
+        title: '日期',
+        tickangle: -45
+    },
+    yaxis: {
+        title: '血压值'
+    },
+    showlegend: true,
+    legend: {
+        x: 0,
+        y: 1.2
+    }
+};
+
+Plotly.newPlot('chart', traces, layout);
 </script>
+
+<style>
+#chart {
+    width: 100%;
+    height: 600px;
+}
+</style>
 {% endblock %} 

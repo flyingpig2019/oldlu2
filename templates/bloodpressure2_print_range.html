@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block header %}
-<h1>{% block title %}血压监测记录打印{% endblock %}</h1>
+<h1>{% block title %}血压监测打印-毛{% endblock %}</h1>
 {% endblock %}
 
 {% block content %}
@@ -24,8 +24,7 @@ document.getElementById('print-form').onsubmit = function(e) {
     e.preventDefault();
     const start_date = this.start_date.value;
     const end_date = this.end_date.value;
-    
-    window.location.href = `/download_blood_pressure_table?start_date=${start_date}&end_date=${end_date}`;
+    window.location.href = `/download_blood_pressure2_table?start_date=${start_date}&end_date=${end_date}`;
 };
 </script>
 

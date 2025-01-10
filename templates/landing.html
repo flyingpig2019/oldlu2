@@ -123,7 +123,7 @@
                 <h4><i class="fas fa-heartbeat me-2"></i>血压监测</h4>
             </div>
             <div class="card-body">
-                <form action="{{ url_for('add_blood_pressure') }}" method="POST">
+                <form action="{{ url_for('add_blood_pressure') }}" method="POST" id="bloodPressureForm">
                     <div class="form-group mb-3">
                         <label class="form-label">日期</label>
                         <input type="date" class="form-control" name="date" value="{{ current_date }}" required>
@@ -131,14 +131,14 @@
                     <div class="row mb-3">
                         <div class="col">
                             <input type="number" class="form-control" name="morning_high" placeholder="早高压" 
-                                   value="{{ last_bp.morning_high }}">
+                                   id="morningHigh">
                         </div>
                         <div class="col">
                             <input type="number" class="form-control" name="morning_low" placeholder="早低压" 
-                                   value="{{ last_bp.morning_low }}">
+                                   id="morningLow">
                         </div>
                         <div class="col">
-                            <button type="submit" name="morning_submit" class="btn btn-primary btn-sm w-100">
+                            <button type="submit" name="morning_submit" class="btn btn-primary btn-sm w-100" onclick="clearAfternoonInputs()">
                                 <i class="fas fa-sun me-1"></i>提交早间
                             </button>
                         </div>
@@ -146,14 +146,14 @@
                     <div class="row mb-3">
                         <div class="col">
                             <input type="number" class="form-control" name="afternoon_high" placeholder="晚高压" 
-                                   value="{{ last_bp.afternoon_high }}">
+                                   id="afternoonHigh">
                         </div>
                         <div class="col">
                             <input type="number" class="form-control" name="afternoon_low" placeholder="晚低压" 
-                                   value="{{ last_bp.afternoon_low }}">
+                                   id="afternoonLow">
                         </div>
                         <div class="col">
-                            <button type="submit" name="afternoon_submit" class="btn btn-primary btn-sm w-100">
+                            <button type="submit" name="afternoon_submit" class="btn btn-primary btn-sm w-100" onclick="clearMorningInputs()">
                                 <i class="fas fa-moon me-1"></i>提交晚间
                             </button>
                         </div>
@@ -285,6 +285,26 @@
         card.addEventListener('mouseleave', function() {
             this.style.transform = 'translateY(0)';
         });
+    });
+
+    function clearMorningInputs() {
+        document.getElementById('morningHigh').value = '';
+        document.getElementById('morningLow').value = '';
+    }
+
+    function clearAfternoonInputs() {
+        document.getElementById('afternoonHigh').value = '';
+        document.getElementById('afternoonLow').value = '';
+    }
+
+    // 表单提交后清空所有输入
+    document.getElementById('bloodPressureForm').addEventListener('submit', function() {
+        setTimeout(function() {
+            document.getElementById('morningHigh').value = '';
+            document.getElementById('morningLow').value = '';
+            document.getElementById('afternoonHigh').value = '';
+            document.getElementById('afternoonLow').value = '';
+        }, 100);
     });
 </script>
 {% endblock %}

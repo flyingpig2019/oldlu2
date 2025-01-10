@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block header %}
+<h1>{% block title %}签到详情{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+<div class="content">
+    <div class="date-header">
+        <h2>{{ date }}</h2>
+        <div class="actions">
+            <a href="{{ url_for('checkin_calendar', year=year, month=month) }}" class="btn">返回日历</a>
+        </div>
+    </div>
+
+    <div class="checkin-card">
+        <div class="status-group">
+            <div class="status-item">
+                <h3>签到状态</h3>
+                <form method="post" action="{{ url_for('toggle_checkin', date=date) }}">
+                    <button type="submit" class="toggle-btn {% if record and record.checkin %}checked{% endif %}">
+                        {{ '已签到' if record and record.checkin else '未签到' }}
+                    </button>
+                </form>
+            </div>
+            
+            <div class="status-item">
+                <h3>签退状态</h3>
+                <form method="post" action="{{ url_for('toggle_checkout', date=date) }}">
+                    <button type="submit" class="toggle-btn {% if record and record.checkout %}checked{% endif %}">
+                        {{ '已签退' if record and record.checkout else '未签退' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="income-section">
+            <h3>当日收入</h3>
+            <p class="income">¥{{ record.income if record else 0 }}</p>
+        </div>
+    </div>
+</div>
+
+<style>
+.date-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.date-header h2 {
+    margin: 0;
+    color: #333;
+}
+.btn {
+    padding: 8px 16px;
+    background: #4CAF50;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+}
+.btn:hover {
+    background: #45a049;
+}
+.checkin-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.status-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+.status-item h3 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+.toggle-btn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    background: #f8f9fa;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.toggle-btn:hover {
+    background: #e9ecef;
+}
+.toggle-btn.checked {
+    background: #4CAF50;
+    color: white;
+}
+.income-section {
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+.income-section h3 {
+    margin: 0 0 10px 0;
+    color: #333;
+}
+.income {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #4CAF50;
+    margin: 0;
+}
+</style>
+{% endblock %} 

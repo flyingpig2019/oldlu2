@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
+from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash, jsonify
 from datetime import datetime, timedelta
 import sqlite3
 import os
@@ -49,23 +49,40 @@ def login_required(f):
     return decorated_function
 
 @app.route('/')
+@login_required
+def index():
+    """首页"""
+    from datetime import datetime
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+    return render_template('index.html', 
+                         current_year=current_year,
+                         current_month=current_month)
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = request.form['username']
+        password = request.form['password']
         
-        # 直接比较（仅用于测试）
+        # 修改为实际的用户名和密码
         if username == 'oldlu214' and password == 'Fanghua530':
             session['logged_in'] = True
-            return redirect(url_for('landing'))
+            return redirect(url_for('index'))
         else:
-            return render_template('login.html', error='用户名或密码错误')
-    return render_template('login.html')
+            flash('用户名或密码错误', 'error')
+    
+    # 确保传递current_year和current_month到模板
+    current_year = datetime.now().year
+    current_month = datetime.now().month
+    return render_template('login.html', 
+                         current_year=current_year,
+                         current_month=current_month)
 
 @app.route('/logout')
 def logout():
-    session.pop('logged_in', None)
+    session.clear()  # 清除所有session数据
+    flash('您已成功退出', 'success')
     return redirect(url_for('login'))
 
 @app.route('/landing')
@@ -160,46 +177,10 @@ def download_database():
     return redirect(url_for('landing'))
 
 def get_db():
-    """连接数据库，确保数据库文件有效"""
-    db_path = 'monitor.db'
-    try:
-        # 如果数据库文件不存在或损坏，创建新的
-        try:
-            conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            # 测试数据库
-            conn.execute("SELECT 1")
-            return conn
-        except:
-            # 关闭任何可能的连接
-            try:
-                conn.close()
-            except:
-                pass
-
-            # 删除损坏的数据库文件
-            try:
-                if os.path.exists(db_path):
-                    os.remove(db_path)
-            except:
-                pass
-
-            # 创建新的数据库
-            init_db()
-            conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            return conn
-
-    except Exception as e:
-        print(f"连接数据库时出错: {str(e)}")
-        # 如果还是失败，尝试最后一次初始化
-        try:
-            init_db()
-            conn = sqlite3.connect(db_path, timeout=20, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            return conn
-        except:
-            raise
+    """获取数据库连接"""
+    db = sqlite3.connect('monitor.db')
+    db.row_factory = sqlite3.Row
+    return db
 
 def init_db():
     """初始化新的数据库"""
@@ -268,9 +249,9 @@ def init_db():
         raise
 
 def get_chinese_weekday(date_str):
-    """将日期转换为中文星期几"""
-    english_weekday = datetime.strptime(date_str, '%Y-%m-%d').strftime('%A')
-    return WEEKDAYS[english_weekday]
+    """获取中文星期几"""
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+    return WEEKDAYS[date_obj.strftime('%A')]
 
 @app.route('/add_medicine_record', methods=['POST'])
 @login_required
@@ -543,7 +524,6 @@ def checkin_calendar():
     # 调整日历数据，使星期日显示在正确位置
     adjusted_calendar = []
     for week in calendar_data:
-        # 创建新的一周，将星期日移到最后
         adjusted_week = week[:-1]  # 去掉最后一个元素（星期日）
         adjusted_week.append(week[-1])  # 将星期日添加到最后
         adjusted_calendar.append(adjusted_week)
@@ -555,22 +535,46 @@ def checkin_calendar():
     db = get_db()
     # 修改查询以获取每天的签到签出状态
     records = db.execute('''
+        WITH daily_records AS (
+            SELECT 
+                date,
+                MAX(checkin) as has_checkin,
+                MAX(checkout) as has_checkout
+            FROM checkin_records 
+            WHERE strftime('%Y-%m', date) = ?
+            GROUP BY date
+        )
         SELECT 
             date,
-            MAX(checkin) as has_checkin,
-            MAX(checkout) as has_checkout,
-            SUM(income) as total_income
-        FROM checkin_records 
-        WHERE strftime('%Y-%m', date) = ?
-        GROUP BY date
+            has_checkin,
+            has_checkout,
+            CASE 
+                WHEN has_checkin = 1 AND has_checkout = 1 THEN 75 
+                ELSE 0 
+            END as total_income
+        FROM daily_records
     ''', [current_month.strftime('%Y-%m')]).fetchall()
     
-    # 获取本月的收入统计
+    # 获取本月的收入统计（根据签到签出状态计算）
     monthly_income = db.execute('''
-        SELECT SUM(income) as total
-        FROM checkin_records
-        WHERE strftime('%Y-%m', date) = ?
+        WITH daily_records AS (
+            SELECT 
+                date,
+                MAX(checkin) as has_checkin,
+                MAX(checkout) as has_checkout
+            FROM checkin_records 
+            WHERE strftime('%Y-%m', date) = ?
+            GROUP BY date
+        )
+        SELECT SUM(
+            CASE 
+                WHEN has_checkin = 1 AND has_checkout = 1 THEN 75 
+                ELSE 0 
+            END
+        ) as total
+        FROM daily_records
     ''', [current_month.strftime('%Y-%m')]).fetchone()['total'] or 0
+    
     db.close()
     
     # 转换记录为字典以便快速查找
@@ -579,7 +583,7 @@ def checkin_calendar():
         record_dict[r['date']] = {
             'checkin': r['has_checkin'],
             'checkout': r['has_checkout'],
-            'income': r['total_income'] or 0,
+            'income': r['total_income'],
             'completed': r['has_checkin'] and r['has_checkout']
         }
     
@@ -627,112 +631,223 @@ def checkin_calendar_month(year, month):
                          records=record_dict,
                          monthly_income=monthly_income)
 
+def calculate_risk(high, low):
+    """计算血压风险等级"""
+    if high <= 120 and low <= 70:
+        return "良好"
+    elif high <= 130 and low <= 80:
+        return "中等"
+    else:
+        return "偏高"
+
 @app.route('/add_blood_pressure', methods=['POST'])
 @login_required
 def add_blood_pressure():
     try:
         date = request.form['date']
         day_of_week = get_chinese_weekday(date)
-        morning_high = request.form.get('morning_high', '')
-        morning_low = request.form.get('morning_low', '')
-        afternoon_high = request.form.get('afternoon_high', '')
-        afternoon_low = request.form.get('afternoon_low', '')
+        owner_id = 1  # 血压监测
         notes = request.form.get('notes', '')
-        risk = request.form.get('risk', '')
-        
-        # 计算日均值
-        daily_high = daily_low = None
-        try:
-            if morning_high and afternoon_high:
-                daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
-            elif morning_high:
-                daily_high = float(morning_high)
-            elif afternoon_high:
-                daily_high = float(afternoon_high)
-                
-            if morning_low and afternoon_low:
-                daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
-            elif morning_low:
-                daily_low = float(morning_low)
-            elif afternoon_low:
-                daily_low = float(afternoon_low)
-            
-            # 设置 today_average
-            today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
-        except (ValueError, TypeError):
-            today_average = ""
         
         db = get_db()
-        db.execute('''INSERT INTO bloodpressure_records 
-                     (date, day_of_week, morning_high, morning_low, 
-                      afternoon_high, afternoon_low, notes, risk, today_average)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    [date, day_of_week, morning_high, morning_low, 
-                     afternoon_high, afternoon_low, notes, risk, today_average])
+        
+        if 'morning_submit' in request.form:
+            morning_high = request.form.get('morning_high', '')
+            morning_low = request.form.get('morning_low', '')
+            
+            try:
+                # 插入或更新早间记录
+                db.execute('''INSERT INTO morning_bloodpressure_records 
+                            (date, day_of_week, owner_id, morning_high, morning_low)
+                            VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, morning_high, morning_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE morning_bloodpressure_records 
+                            SET morning_high = ?, morning_low = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [morning_high, morning_low, date, owner_id])
+            
+            # 更新备注
+            try:
+                db.execute('''INSERT INTO bloodpressure_notes_records 
+                            (date, day_of_week, owner_id, notes)
+                            VALUES (?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, notes])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE bloodpressure_notes_records 
+                            SET notes = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [notes, date, owner_id])
+        
+        elif 'afternoon_submit' in request.form:
+            night_high = request.form.get('afternoon_high', '')
+            night_low = request.form.get('afternoon_low', '')
+            
+            try:
+                # 插入或更新晚间记录
+                db.execute('''INSERT INTO night_bloodpressure_records 
+                            (date, day_of_week, owner_id, night_high, night_low)
+                            VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, night_high, night_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE night_bloodpressure_records 
+                            SET night_high = ?, night_low = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [night_high, night_low, date, owner_id])
+            
+            # 更新备注
+            try:
+                db.execute('''INSERT INTO bloodpressure_notes_records 
+                            (date, day_of_week, owner_id, notes)
+                            VALUES (?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, notes])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE bloodpressure_notes_records 
+                            SET notes = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [notes, date, owner_id])
+        
+        # 计算并更新日均值和风险等级
+        record = db.execute('''
+            SELECT m.morning_high, m.morning_low, n.night_high, n.night_low
+            FROM morning_bloodpressure_records m
+            LEFT JOIN night_bloodpressure_records n 
+            ON m.date = n.date AND m.owner_id = n.owner_id
+            WHERE m.date = ? AND m.owner_id = ?
+        ''', [date, owner_id]).fetchone()
+        
+        if record:
+            avg_high = avg_low = None
+            if record['morning_high'] and record['night_high']:
+                avg_high = round((record['morning_high'] + record['night_high']) / 2, 1)
+            elif record['morning_high']:
+                avg_high = record['morning_high']
+            elif record['night_high']:
+                avg_high = record['night_high']
+                
+            if record['morning_low'] and record['night_low']:
+                avg_low = round((record['morning_low'] + record['night_low']) / 2, 1)
+            elif record['morning_low']:
+                avg_low = record['morning_low']
+            elif record['night_low']:
+                avg_low = record['night_low']
+            
+            if avg_high and avg_low:
+                average = f"{avg_high}/{avg_low}"
+                risk = calculate_risk(avg_high, avg_low)
+                
+                try:
+                    db.execute('''INSERT INTO bloodpressure_calculation_records 
+                                (date, day_of_week, owner_id, average, risk)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             [date, day_of_week, owner_id, average, risk])
+                except sqlite3.IntegrityError:
+                    db.execute('''UPDATE bloodpressure_calculation_records 
+                                SET average = ?, risk = ?
+                                WHERE date = ? AND owner_id = ?''',
+                             [average, risk, date, owner_id])
+        
         db.commit()
         db.close()
         
         force_upload_to_github()
-        return redirect(url_for('landing'))
+        return redirect(url_for('blood_pressure_detail'))
     except Exception as e:
         print(f"添加血压记录时出错: {str(e)}")
-        return redirect(url_for('landing'))
+        return redirect(url_for('blood_pressure_detail'))
 
-@app.route('/edit_blood_pressure/<int:id>', methods=['POST'])
+@app.route('/edit_blood_pressure/<date>', methods=['POST'])  # 修改这里
 @login_required
-def edit_blood_pressure(id):
+def edit_blood_pressure(date):  # 修改这里
     try:
+        day_of_week = get_chinese_weekday(date)
+        owner_id = 1  # 血压监测
         morning_high = request.form.get('morning_high')
         morning_low = request.form.get('morning_low')
         afternoon_high = request.form.get('afternoon_high')
         afternoon_low = request.form.get('afternoon_low')
         notes = request.form.get('notes', '')
         
-        # 计算日均值
-        daily_high = daily_low = None
-        if morning_high and afternoon_high:
-            daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
-        elif morning_high:
-            daily_high = float(morning_high)
-        elif afternoon_high:
-            daily_high = float(afternoon_high)
-            
-        if morning_low and afternoon_low:
-            daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
-        elif morning_low:
-            daily_low = float(morning_low)
-        elif afternoon_low:
-            daily_low = float(afternoon_low)
-        
-        # 设置 today_average
-        today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
-        
         db = get_db()
-        db.execute('''UPDATE bloodpressure_records 
-                     SET morning_high = ?, morning_low = ?,
-                         afternoon_high = ?, afternoon_low = ?,
-                         notes = ?, today_average = ?
-                     WHERE id = ?''',
-                  [morning_high, morning_low, afternoon_high, 
-                   afternoon_low, notes, today_average, id])
+        
+        # 更新早间数据
+        if morning_high or morning_low:
+            try:
+                db.execute('''INSERT INTO morning_bloodpressure_records 
+                             (date, day_of_week, owner_id, morning_high, morning_low)
+                             VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, morning_high, morning_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE morning_bloodpressure_records 
+                             SET morning_high = ?, morning_low = ?
+                             WHERE date = ? AND owner_id = ?''',
+                         [morning_high, morning_low, date, owner_id])
+        
+        # 更新晚间数据
+        if afternoon_high or afternoon_low:
+            try:
+                db.execute('''INSERT INTO night_bloodpressure_records 
+                             (date, day_of_week, owner_id, night_high, night_low)
+                             VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, afternoon_high, afternoon_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE night_bloodpressure_records 
+                             SET night_high = ?, night_low = ?
+                             WHERE date = ? AND owner_id = ?''',
+                         [afternoon_high, afternoon_low, date, owner_id])
+        
+        # 更新备注
+        try:
+            db.execute('''INSERT INTO bloodpressure_notes_records 
+                         (date, day_of_week, owner_id, notes)
+                         VALUES (?, ?, ?, ?)''',
+                      [date, day_of_week, owner_id, notes])
+        except sqlite3.IntegrityError:
+            db.execute('''UPDATE bloodpressure_notes_records 
+                         SET notes = ?
+                         WHERE date = ? AND owner_id = ?''',
+                      [notes, date, owner_id])
+        
+        # 重新计算日均值和风险等级
+        update_blood_pressure_calculation(db, date, owner_id)
+        
         db.commit()
         db.close()
         
         force_upload_to_github()
-        return redirect(url_for('blood_pressure_detail'))
+        flash('记录更新成功', 'success')
     except Exception as e:
         print(f"编辑血压记录时出错: {str(e)}")
-        return redirect(url_for('blood_pressure_detail'))
-
-@app.route('/delete_blood_pressure/<int:id>')
-@login_required
-def delete_blood_pressure(id):
-    db = get_db()
-    db.execute('DELETE FROM bloodpressure_records WHERE id = ?', [id])
-    db.commit()
-    db.close()
+        flash('编辑记录时出错', 'error')
     
-    push_db_updates()
+    return redirect(url_for('blood_pressure_detail'))
+
+@app.route('/delete_blood_pressure/<date>')  # 修改这里
+@login_required
+def delete_blood_pressure(date):  # 修改这里
+    try:
+        owner_id = 1  # 血压监测
+        db = get_db()
+        
+        # 删除所有相关记录
+        db.execute('DELETE FROM morning_bloodpressure_records WHERE date = ? AND owner_id = ?', 
+                  [date, owner_id])
+        db.execute('DELETE FROM night_bloodpressure_records WHERE date = ? AND owner_id = ?', 
+                  [date, owner_id])
+        db.execute('DELETE FROM bloodpressure_calculation_records WHERE date = ? AND owner_id = ?', 
+                  [date, owner_id])
+        db.execute('DELETE FROM bloodpressure_notes_records WHERE date = ? AND owner_id = ?', 
+                  [date, owner_id])
+        
+        db.commit()
+        db.close()
+        
+        force_upload_to_github()
+        flash('记录删除成功', 'success')
+    except Exception as e:
+        print(f"删除记录时出错: {str(e)}")
+        flash('删除记录时出错', 'error')
+    
     return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/add_blood_pressure2', methods=['POST'])
@@ -741,88 +856,208 @@ def add_blood_pressure2():
     try:
         date = request.form['date']
         day_of_week = get_chinese_weekday(date)
-        morning_high = request.form.get('morning_high', '')
-        morning_low = request.form.get('morning_low', '')
-        afternoon_high = request.form.get('afternoon_high', '')
-        afternoon_low = request.form.get('afternoon_low', '')
+        owner_id = 2  # 血压监测-毛
         notes = request.form.get('notes', '')
-        risk = request.form.get('risk', '')
-        
-        # 计算日均值
-        daily_high = daily_low = None
-        try:
-            if morning_high and afternoon_high:
-                daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
-            elif morning_high:
-                daily_high = float(morning_high)
-            elif afternoon_high:
-                daily_high = float(afternoon_high)
-                
-            if morning_low and afternoon_low:
-                daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
-            elif morning_low:
-                daily_low = float(morning_low)
-            elif afternoon_low:
-                daily_low = float(afternoon_low)
-            
-            # 设置 today_average
-            today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
-        except (ValueError, TypeError):
-            today_average = ""
         
         db = get_db()
-        db.execute('''INSERT INTO bloodpressure2_records 
-                     (date, day_of_week, morning_high, morning_low, 
-                      afternoon_high, afternoon_low, notes, risk, today_average)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    [date, day_of_week, morning_high, morning_low, 
-                     afternoon_high, afternoon_low, notes, risk, today_average])
+        
+        if 'morning_submit' in request.form:
+            morning_high = request.form.get('morning_high', '')
+            morning_low = request.form.get('morning_low', '')
+            
+            try:
+                # 插入或更新早间记录
+                db.execute('''INSERT INTO morning_bloodpressure_records 
+                            (date, day_of_week, owner_id, morning_high, morning_low)
+                            VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, morning_high, morning_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE morning_bloodpressure_records 
+                            SET morning_high = ?, morning_low = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [morning_high, morning_low, date, owner_id])
+            
+            # 更新备注
+            try:
+                db.execute('''INSERT INTO bloodpressure_notes_records 
+                            (date, day_of_week, owner_id, notes)
+                            VALUES (?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, notes])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE bloodpressure_notes_records 
+                            SET notes = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [notes, date, owner_id])
+        
+        elif 'afternoon_submit' in request.form:
+            night_high = request.form.get('afternoon_high', '')
+            night_low = request.form.get('afternoon_low', '')
+            
+            try:
+                # 插入或更新晚间记录
+                db.execute('''INSERT INTO night_bloodpressure_records 
+                            (date, day_of_week, owner_id, night_high, night_low)
+                            VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, night_high, night_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE night_bloodpressure_records 
+                            SET night_high = ?, night_low = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [night_high, night_low, date, owner_id])
+            
+            # 更新备注
+            try:
+                db.execute('''INSERT INTO bloodpressure_notes_records 
+                            (date, day_of_week, owner_id, notes)
+                            VALUES (?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, notes])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE bloodpressure_notes_records 
+                            SET notes = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [notes, date, owner_id])
+        
+        # 计算并更新日均值和风险等级
+        record = db.execute('''
+            SELECT m.morning_high, m.morning_low, n.night_high, n.night_low
+            FROM morning_bloodpressure_records m
+            LEFT JOIN night_bloodpressure_records n 
+            ON m.date = n.date AND m.owner_id = n.owner_id
+            WHERE m.date = ? AND m.owner_id = ?
+        ''', [date, owner_id]).fetchone()
+        
+        if record:
+            avg_high = avg_low = None
+            if record['morning_high'] and record['night_high']:
+                avg_high = round((record['morning_high'] + record['night_high']) / 2, 1)
+            elif record['morning_high']:
+                avg_high = record['morning_high']
+            elif record['night_high']:
+                avg_high = record['night_high']
+                
+            if record['morning_low'] and record['night_low']:
+                avg_low = round((record['morning_low'] + record['night_low']) / 2, 1)
+            elif record['morning_low']:
+                avg_low = record['morning_low']
+            elif record['night_low']:
+                avg_low = record['night_low']
+            
+            if avg_high and avg_low:
+                average = f"{avg_high}/{avg_low}"
+                risk = calculate_risk(avg_high, avg_low)
+                
+                try:
+                    db.execute('''INSERT INTO bloodpressure_calculation_records 
+                                (date, day_of_week, owner_id, average, risk)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             [date, day_of_week, owner_id, average, risk])
+                except sqlite3.IntegrityError:
+                    db.execute('''UPDATE bloodpressure_calculation_records 
+                                SET average = ?, risk = ?
+                                WHERE date = ? AND owner_id = ?''',
+                             [average, risk, date, owner_id])
+        
         db.commit()
         db.close()
         
         force_upload_to_github()
-        return redirect(url_for('landing'))
+        return redirect(url_for('blood_pressure2_detail'))
     except Exception as e:
         print(f"添加血压记录时出错: {str(e)}")
-        return redirect(url_for('landing'))
+        return redirect(url_for('blood_pressure2_detail'))
 
-@app.route('/edit_blood_pressure2/<int:id>', methods=['POST'])
+@app.route('/edit_blood_pressure2/<date>', methods=['POST'])
 @login_required
-def edit_blood_pressure2(id):
+def edit_blood_pressure2(date):  # 修改这里
     try:
+        day_of_week = get_chinese_weekday(date)
+        owner_id = 2  # 血压监测-毛
         morning_high = request.form.get('morning_high')
         morning_low = request.form.get('morning_low')
         afternoon_high = request.form.get('afternoon_high')
         afternoon_low = request.form.get('afternoon_low')
         notes = request.form.get('notes', '')
         
-        # 计算日均值
-        daily_high = daily_low = None
-        if morning_high and afternoon_high:
-            daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
-        elif morning_high:
-            daily_high = float(morning_high)
-        elif afternoon_high:
-            daily_high = float(afternoon_high)
-            
-        if morning_low and afternoon_low:
-            daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
-        elif morning_low:
-            daily_low = float(morning_low)
-        elif afternoon_low:
-            daily_low = float(afternoon_low)
-        
-        # 设置 today_average
-        today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
-        
         db = get_db()
-        db.execute('''UPDATE bloodpressure2_records 
-                     SET morning_high = ?, morning_low = ?,
-                         afternoon_high = ?, afternoon_low = ?,
-                         notes = ?, today_average = ?
-                     WHERE id = ?''',
-                  [morning_high, morning_low, afternoon_high, 
-                   afternoon_low, notes, today_average, id])
+        
+        # 更新早间数据
+        if morning_high or morning_low:
+            try:
+                db.execute('''INSERT INTO morning_bloodpressure_records 
+                             (date, day_of_week, owner_id, morning_high, morning_low)
+                             VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, morning_high, morning_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE morning_bloodpressure_records 
+                             SET morning_high = ?, morning_low = ?
+                             WHERE date = ? AND owner_id = ?''',
+                         [morning_high, morning_low, date, owner_id])
+        
+        # 更新晚间数据
+        if afternoon_high or afternoon_low:
+            try:
+                db.execute('''INSERT INTO night_bloodpressure_records 
+                             (date, day_of_week, owner_id, night_high, night_low)
+                             VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, afternoon_high, afternoon_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE night_bloodpressure_records 
+                             SET night_high = ?, night_low = ?
+                             WHERE date = ? AND owner_id = ?''',
+                         [afternoon_high, afternoon_low, date, owner_id])
+        
+        # 更新备注
+        try:
+            db.execute('''INSERT INTO bloodpressure_notes_records 
+                         (date, day_of_week, owner_id, notes)
+                         VALUES (?, ?, ?, ?)''',
+                      [date, day_of_week, owner_id, notes])
+        except sqlite3.IntegrityError:
+            db.execute('''UPDATE bloodpressure_notes_records 
+                         SET notes = ?
+                         WHERE date = ? AND owner_id = ?''',
+                      [notes, date, owner_id])
+        
+        # 重新计算日均值和风险等级
+        record = db.execute('''
+            SELECT m.morning_high, m.morning_low, n.night_high, n.night_low
+            FROM morning_bloodpressure_records m
+            LEFT JOIN night_bloodpressure_records n 
+            ON m.date = n.date AND m.owner_id = n.owner_id
+            WHERE m.date = ? AND m.owner_id = ?
+        ''', [date, owner_id]).fetchone()
+        
+        if record:
+            avg_high = avg_low = None
+            if record['morning_high'] and record['night_high']:
+                avg_high = round((record['morning_high'] + record['night_high']) / 2, 1)
+            elif record['morning_high']:
+                avg_high = record['morning_high']
+            elif record['night_high']:
+                avg_high = record['night_high']
+                
+            if record['morning_low'] and record['night_low']:
+                avg_low = round((record['morning_low'] + record['night_low']) / 2, 1)
+            elif record['morning_low']:
+                avg_low = record['morning_low']
+            elif record['night_low']:
+                avg_low = record['night_low']
+            
+            if avg_high and avg_low:
+                average = f"{avg_high}/{avg_low}"
+                risk = calculate_risk(avg_high, avg_low)
+                
+                try:
+                    db.execute('''INSERT INTO bloodpressure_calculation_records 
+                                (date, day_of_week, owner_id, average, risk)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             [date, day_of_week, owner_id, average, risk])
+                except sqlite3.IntegrityError:
+                    db.execute('''UPDATE bloodpressure_calculation_records 
+                                SET average = ?, risk = ?
+                                WHERE date = ? AND owner_id = ?''',
+                             [average, risk, date, owner_id])
+        
         db.commit()
         db.close()
         
@@ -832,18 +1067,23 @@ def edit_blood_pressure2(id):
         print(f"编辑血压记录时出错: {str(e)}")
         return redirect(url_for('blood_pressure2_detail'))
 
-@app.route('/delete_blood_pressure2/<int:id>')
+@app.route('/delete_blood_pressure2/<date>')
 @login_required
-def delete_blood_pressure2(id):
+def delete_blood_pressure2(date):
     try:
+        owner_id = 2  # 血压监测-毛
         db = get_db()
-        db.execute('DELETE FROM bloodpressure2_records WHERE id = ?', [id])
+        
+        # 删除所有相关记录
+        db.execute('DELETE FROM morning_bloodpressure_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        db.execute('DELETE FROM night_bloodpressure_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        db.execute('DELETE FROM bloodpressure_calculation_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        db.execute('DELETE FROM bloodpressure_notes_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('blood_pressure2_detail'))
     except Exception as e:
         print(f"删除血压记录时出错: {str(e)}")
@@ -855,88 +1095,208 @@ def add_blood_pressure3():
     try:
         date = request.form['date']
         day_of_week = get_chinese_weekday(date)
-        morning_high = request.form.get('morning_high', '')
-        morning_low = request.form.get('morning_low', '')
-        afternoon_high = request.form.get('afternoon_high', '')
-        afternoon_low = request.form.get('afternoon_low', '')
+        owner_id = 3  # 血压监测-祺
         notes = request.form.get('notes', '')
-        risk = request.form.get('risk', '')
-        
-        # 计算日均值
-        daily_high = daily_low = None
-        try:
-            if morning_high and afternoon_high:
-                daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
-            elif morning_high:
-                daily_high = float(morning_high)
-            elif afternoon_high:
-                daily_high = float(afternoon_high)
-                
-            if morning_low and afternoon_low:
-                daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
-            elif morning_low:
-                daily_low = float(morning_low)
-            elif afternoon_low:
-                daily_low = float(afternoon_low)
-            
-            # 设置 today_average
-            today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
-        except (ValueError, TypeError):
-            today_average = ""
         
         db = get_db()
-        db.execute('''INSERT INTO bloodpressure3_records 
-                     (date, day_of_week, morning_high, morning_low, 
-                      afternoon_high, afternoon_low, notes, risk, today_average)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                    [date, day_of_week, morning_high, morning_low, 
-                     afternoon_high, afternoon_low, notes, risk, today_average])
+        
+        if 'morning_submit' in request.form:
+            morning_high = request.form.get('morning_high', '')
+            morning_low = request.form.get('morning_low', '')
+            
+            try:
+                # 插入或更新早间记录
+                db.execute('''INSERT INTO morning_bloodpressure_records 
+                            (date, day_of_week, owner_id, morning_high, morning_low)
+                            VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, morning_high, morning_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE morning_bloodpressure_records 
+                            SET morning_high = ?, morning_low = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [morning_high, morning_low, date, owner_id])
+            
+            # 更新备注
+            try:
+                db.execute('''INSERT INTO bloodpressure_notes_records 
+                            (date, day_of_week, owner_id, notes)
+                            VALUES (?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, notes])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE bloodpressure_notes_records 
+                            SET notes = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [notes, date, owner_id])
+        
+        elif 'afternoon_submit' in request.form:
+            night_high = request.form.get('afternoon_high', '')
+            night_low = request.form.get('afternoon_low', '')
+            
+            try:
+                # 插入或更新晚间记录
+                db.execute('''INSERT INTO night_bloodpressure_records 
+                            (date, day_of_week, owner_id, night_high, night_low)
+                            VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, night_high, night_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE night_bloodpressure_records 
+                            SET night_high = ?, night_low = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [night_high, night_low, date, owner_id])
+            
+            # 更新备注
+            try:
+                db.execute('''INSERT INTO bloodpressure_notes_records 
+                            (date, day_of_week, owner_id, notes)
+                            VALUES (?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, notes])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE bloodpressure_notes_records 
+                            SET notes = ?
+                            WHERE date = ? AND owner_id = ?''',
+                         [notes, date, owner_id])
+        
+        # 计算并更新日均值和风险等级
+        record = db.execute('''
+            SELECT m.morning_high, m.morning_low, n.night_high, n.night_low
+            FROM morning_bloodpressure_records m
+            LEFT JOIN night_bloodpressure_records n 
+            ON m.date = n.date AND m.owner_id = n.owner_id
+            WHERE m.date = ? AND m.owner_id = ?
+        ''', [date, owner_id]).fetchone()
+        
+        if record:
+            avg_high = avg_low = None
+            if record['morning_high'] and record['night_high']:
+                avg_high = round((record['morning_high'] + record['night_high']) / 2, 1)
+            elif record['morning_high']:
+                avg_high = record['morning_high']
+            elif record['night_high']:
+                avg_high = record['night_high']
+                
+            if record['morning_low'] and record['night_low']:
+                avg_low = round((record['morning_low'] + record['night_low']) / 2, 1)
+            elif record['morning_low']:
+                avg_low = record['morning_low']
+            elif record['night_low']:
+                avg_low = record['night_low']
+            
+            if avg_high and avg_low:
+                average = f"{avg_high}/{avg_low}"
+                risk = calculate_risk(avg_high, avg_low)
+                
+                try:
+                    db.execute('''INSERT INTO bloodpressure_calculation_records 
+                                (date, day_of_week, owner_id, average, risk)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             [date, day_of_week, owner_id, average, risk])
+                except sqlite3.IntegrityError:
+                    db.execute('''UPDATE bloodpressure_calculation_records 
+                                SET average = ?, risk = ?
+                                WHERE date = ? AND owner_id = ?''',
+                             [average, risk, date, owner_id])
+        
         db.commit()
         db.close()
         
         force_upload_to_github()
-        return redirect(url_for('landing'))
+        return redirect(url_for('blood_pressure3_detail'))
     except Exception as e:
         print(f"添加血压记录时出错: {str(e)}")
-        return redirect(url_for('landing'))
+        return redirect(url_for('blood_pressure3_detail'))
 
-@app.route('/edit_blood_pressure3/<int:id>', methods=['POST'])
+@app.route('/edit_blood_pressure3/<date>', methods=['POST'])
 @login_required
-def edit_blood_pressure3(id):
+def edit_blood_pressure3(date):
     try:
+        day_of_week = get_chinese_weekday(date)
+        owner_id = 3  # 血压监测-祺
         morning_high = request.form.get('morning_high')
         morning_low = request.form.get('morning_low')
         afternoon_high = request.form.get('afternoon_high')
         afternoon_low = request.form.get('afternoon_low')
         notes = request.form.get('notes', '')
         
-        # 计算日均值
-        daily_high = daily_low = None
-        if morning_high and afternoon_high:
-            daily_high = round((float(morning_high) + float(afternoon_high)) / 2, 1)
-        elif morning_high:
-            daily_high = float(morning_high)
-        elif afternoon_high:
-            daily_high = float(afternoon_high)
-            
-        if morning_low and afternoon_low:
-            daily_low = round((float(morning_low) + float(afternoon_low)) / 2, 1)
-        elif morning_low:
-            daily_low = float(morning_low)
-        elif afternoon_low:
-            daily_low = float(afternoon_low)
-        
-        # 设置 today_average
-        today_average = f"{daily_high}/{daily_low}" if daily_high is not None and daily_low is not None else ""
-        
         db = get_db()
-        db.execute('''UPDATE bloodpressure3_records 
-                     SET morning_high = ?, morning_low = ?,
-                         afternoon_high = ?, afternoon_low = ?,
-                         notes = ?, today_average = ?
-                     WHERE id = ?''',
-                  [morning_high, morning_low, afternoon_high, 
-                   afternoon_low, notes, today_average, id])
+        
+        # 更新早间数据
+        if morning_high or morning_low:
+            try:
+                db.execute('''INSERT INTO morning_bloodpressure_records 
+                             (date, day_of_week, owner_id, morning_high, morning_low)
+                             VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, morning_high, morning_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE morning_bloodpressure_records 
+                             SET morning_high = ?, morning_low = ?
+                             WHERE date = ? AND owner_id = ?''',
+                         [morning_high, morning_low, date, owner_id])
+        
+        # 更新晚间数据
+        if afternoon_high or afternoon_low:
+            try:
+                db.execute('''INSERT INTO night_bloodpressure_records 
+                             (date, day_of_week, owner_id, night_high, night_low)
+                             VALUES (?, ?, ?, ?, ?)''',
+                         [date, day_of_week, owner_id, afternoon_high, afternoon_low])
+            except sqlite3.IntegrityError:
+                db.execute('''UPDATE night_bloodpressure_records 
+                             SET night_high = ?, night_low = ?
+                             WHERE date = ? AND owner_id = ?''',
+                         [afternoon_high, afternoon_low, date, owner_id])
+        
+        # 更新备注
+        try:
+            db.execute('''INSERT INTO bloodpressure_notes_records 
+                         (date, day_of_week, owner_id, notes)
+                         VALUES (?, ?, ?, ?)''',
+                      [date, day_of_week, owner_id, notes])
+        except sqlite3.IntegrityError:
+            db.execute('''UPDATE bloodpressure_notes_records 
+                         SET notes = ?
+                         WHERE date = ? AND owner_id = ?''',
+                      [notes, date, owner_id])
+        
+        # 重新计算日均值和风险等级
+        record = db.execute('''
+            SELECT m.morning_high, m.morning_low, n.night_high, n.night_low
+            FROM morning_bloodpressure_records m
+            LEFT JOIN night_bloodpressure_records n 
+            ON m.date = n.date AND m.owner_id = n.owner_id
+            WHERE m.date = ? AND m.owner_id = ?
+        ''', [date, owner_id]).fetchone()
+        
+        if record:
+            avg_high = avg_low = None
+            if record['morning_high'] and record['night_high']:
+                avg_high = round((record['morning_high'] + record['night_high']) / 2, 1)
+            elif record['morning_high']:
+                avg_high = record['morning_high']
+            elif record['night_high']:
+                avg_high = record['night_high']
+                
+            if record['morning_low'] and record['night_low']:
+                avg_low = round((record['morning_low'] + record['night_low']) / 2, 1)
+            elif record['morning_low']:
+                avg_low = record['morning_low']
+            elif record['night_low']:
+                avg_low = record['night_low']
+            
+            if avg_high and avg_low:
+                average = f"{avg_high}/{avg_low}"
+                risk = calculate_risk(avg_high, avg_low)
+                
+                try:
+                    db.execute('''INSERT INTO bloodpressure_calculation_records 
+                                (date, day_of_week, owner_id, average, risk)
+                                VALUES (?, ?, ?, ?, ?)''',
+                             [date, day_of_week, owner_id, average, risk])
+                except sqlite3.IntegrityError:
+                    db.execute('''UPDATE bloodpressure_calculation_records 
+                                SET average = ?, risk = ?
+                                WHERE date = ? AND owner_id = ?''',
+                             [average, risk, date, owner_id])
+        
         db.commit()
         db.close()
         
@@ -946,18 +1306,23 @@ def edit_blood_pressure3(id):
         print(f"编辑血压记录时出错: {str(e)}")
         return redirect(url_for('blood_pressure3_detail'))
 
-@app.route('/delete_blood_pressure3/<int:id>')
+@app.route('/delete_blood_pressure3/<date>')
 @login_required
-def delete_blood_pressure3(id):
+def delete_blood_pressure3(date):
     try:
+        owner_id = 3  # 血压监测-祺
         db = get_db()
-        db.execute('DELETE FROM bloodpressure3_records WHERE id = ?', [id])
+        
+        # 删除所有相关记录
+        db.execute('DELETE FROM morning_bloodpressure_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        db.execute('DELETE FROM night_bloodpressure_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        db.execute('DELETE FROM bloodpressure_calculation_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        db.execute('DELETE FROM bloodpressure_notes_records WHERE date = ? AND owner_id = ?', [date, owner_id])
+        
         db.commit()
         db.close()
         
-        # 自动上传到 GitHub
         force_upload_to_github()
-        
         return redirect(url_for('blood_pressure3_detail'))
     except Exception as e:
         print(f"删除血压记录时出错: {str(e)}")
@@ -967,592 +1332,124 @@ def delete_blood_pressure3(id):
 @login_required
 def blood_pressure2_detail():
     page = request.args.get('page', 1, type=int)
-    per_page = 10
+    per_page = 10  # 每页显示10条记录
+    offset = (page - 1) * per_page
+    owner_id = 2  # 血压监测-毛
     
     db = get_db()
-    total = db.execute('SELECT COUNT(*) FROM bloodpressure2_records').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
     
-    offset = (page - 1) * per_page
-    records = db.execute('''SELECT * FROM bloodpressure2_records 
-                           ORDER BY date DESC LIMIT ? OFFSET ?''',
-                        [per_page, offset]).fetchall()
+    # 获取总记录数
+    total_records = db.execute('''
+        SELECT COUNT(DISTINCT d.date) 
+        FROM (
+            SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+            UNION
+            SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+        ) d
+    ''', [owner_id, owner_id]).fetchone()[0]
     
-    # 将记录转换为字典列表，并计算日均值
-    records_with_daily = []
-    for record in records:
-        record_dict = dict(record)
-        # 修改日均值计算逻辑
-        if record['morning_high'] and record['afternoon_high']:
-            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-        elif record['morning_high']:
-            record_dict['daily_high'] = record['morning_high']
-        elif record['afternoon_high']:
-            record_dict['daily_high'] = record['afternoon_high']
-        else:
-            record_dict['daily_high'] = None
-        
-        if record['morning_low'] and record['afternoon_low']:
-            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-        elif record['morning_low']:
-            record_dict['daily_low'] = record['morning_low']
-        elif record['afternoon_low']:
-            record_dict['daily_low'] = record['afternoon_low']
-        else:
-            record_dict['daily_low'] = None
-        
-        records_with_daily.append(record_dict)
+    # 计算总页数
+    total_pages = (total_records + per_page - 1) // per_page
     
-    db.close()
+    # 获取当前页的记录
+    records = db.execute('''
+        WITH all_dates AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            ORDER BY date DESC
+            LIMIT ? OFFSET ?
+        )
+        SELECT 
+            d.date,
+            strftime('%w', d.date) as day_of_week,
+            m.morning_high,
+            m.morning_low,
+            n.night_high,
+            n.night_low,
+            c.average,
+            c.risk,
+            nt.notes
+        FROM all_dates d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+        LEFT JOIN bloodpressure_calculation_records c 
+            ON d.date = c.date AND c.owner_id = ?
+        LEFT JOIN bloodpressure_notes_records nt 
+            ON d.date = nt.date AND nt.owner_id = ?
+        ORDER BY d.date DESC
+    ''', [owner_id, owner_id, per_page, offset, owner_id, owner_id, owner_id, owner_id]).fetchall()
     
     return render_template('bloodpressure2detail.html',
-                         records=records_with_daily,
-                         current_page=page,
-                         total_pages=total_pages)
-
-@app.route('/blood_pressure3_detail')
-@login_required
-def blood_pressure3_detail():
-    page = request.args.get('page', 1, type=int)
-    per_page = 10
-    
-    db = get_db()
-    total = db.execute('SELECT COUNT(*) FROM bloodpressure3_records').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
-    
-    offset = (page - 1) * per_page
-    records = db.execute('''SELECT * FROM bloodpressure3_records 
-                           ORDER BY date DESC LIMIT ? OFFSET ?''',
-                        [per_page, offset]).fetchall()
-    
-    # 将记录转换为字典列表，并计算日均值
-    records_with_daily = []
-    for record in records:
-        record_dict = dict(record)
-        # 修改日均值计算逻辑
-        if record['morning_high'] and record['afternoon_high']:
-            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-        elif record['morning_high']:
-            record_dict['daily_high'] = record['morning_high']
-        elif record['afternoon_high']:
-            record_dict['daily_high'] = record['afternoon_high']
-        else:
-            record_dict['daily_high'] = None
-        
-        if record['morning_low'] and record['afternoon_low']:
-            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-        elif record['morning_low']:
-            record_dict['daily_low'] = record['morning_low']
-        elif record['afternoon_low']:
-            record_dict['daily_low'] = record['afternoon_low']
-        else:
-            record_dict['daily_low'] = None
-        
-        records_with_daily.append(record_dict)
-    
-    db.close()
-    
-    return render_template('bloodpressure3detail.html',
-                         records=records_with_daily,
-                         current_page=page,
-                         total_pages=total_pages)
-
-@app.route('/medicine_calendar')
-@login_required
-def medicine_calendar():
-    current_month = datetime.now()
-    calendar_data = monthcalendar(current_month.year, current_month.month)
-    
-    db = get_db()
-    records = db.execute('''SELECT date, medicine_taken 
-                           FROM medicine_records 
-                           WHERE strftime('%Y-%m', date) = ?''',
-                        [current_month.strftime('%Y-%m')]).fetchall()
-    db.close()
-    
-    # 转换记录为字典以便快速查找
-    record_dict = {r['date']: {'medicine_taken': r['medicine_taken']} 
-                  for r in records}
-    
-    return render_template('medicinecalendardetail.html',
-                         calendar=calendar_data,
-                         current_month=current_month,
-                         records=record_dict)
-
-@app.route('/medicine_calendar/<int:year>/<int:month>')
-@login_required
-def medicine_calendar_month(year, month):
-    selected_month = datetime(year, month, 1)
-    calendar_data = monthcalendar(year, month)
-    
-    db = get_db()
-    records = db.execute('''SELECT date, medicine_taken 
-                           FROM medicine_records 
-                           WHERE strftime('%Y-%m', date) = ?''',
-                        [selected_month.strftime('%Y-%m')]).fetchall()
-    db.close()
-    
-    # 转换记录为字典以便快速查找
-    record_dict = {r['date']: {'medicine_taken': r['medicine_taken']} 
-                  for r in records}
-    
-    return render_template('medicinecalendardetail.html',
-                         calendar=calendar_data,
-                         current_month=selected_month,
-                         records=record_dict)
-
-@app.route('/income_detail')
-@login_required
-def income_detail():
-    # 获取日期范围参数
-    start_date = request.args.get('start_date', 
-                                (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d'))
-    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
-    
-    db = get_db()
-    # 获取指定日期范围内的收入记录
-    records = db.execute('''SELECT date, income 
-                           FROM checkin_records 
-                           WHERE date BETWEEN ? AND ?
-                           ORDER BY date DESC''',
-                        [start_date, end_date]).fetchall()
-    
-    # 计算总收入
-    total_income = db.execute('''SELECT SUM(income) as total 
-                                FROM checkin_records 
-                                WHERE date BETWEEN ? AND ?''',
-                             [start_date, end_date]).fetchone()['total'] or 0
-    
-    # 计算每日平均收入
-    days = (datetime.strptime(end_date, '%Y-%m-%d') - 
-            datetime.strptime(start_date, '%Y-%m-%d')).days + 1
-    average_income = total_income / days if days > 0 else 0
-    
-    # 获取收入数据用于图表
-    dates = [r['date'] for r in records]
-    incomes = [float(r['income']) for r in records]
-    
-    db.close()
-    
-    return render_template('incomedetail.html',
-                         start_date=start_date,
-                         end_date=end_date,
                          records=records,
-                         total_income=total_income,
-                         average_income=average_income,
-                         dates=dates,
-                         incomes=incomes)
-
-@app.route('/download_income_report')
-@login_required
-def download_income_report():
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    
-    db = get_db()
-    records = db.execute('''
-        SELECT date, day_of_week, checkin, checkout, income, notes
-        FROM checkin_records 
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date
-    ''', [start_date, end_date]).fetchall()
-    db.close()
-    
-    # 创建Excel文件
-    output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output)
-    worksheet = workbook.add_worksheet('收入报告')
-    
-    # 设置列宽
-    worksheet.set_column('A:A', 12)  # 日期
-    worksheet.set_column('B:B', 8)   # 星期
-    worksheet.set_column('C:D', 8)   # 签到/签退
-    worksheet.set_column('E:E', 10)  # 收入
-    worksheet.set_column('F:F', 30)  # 备注
-    
-    # 写入表头
-    headers = ['日期', '星期', '签到', '签退', '收入', '备注']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header)
-    
-    # 写入数据
-    for row, record in enumerate(records, 1):
-        worksheet.write(row, 0, record['date'])
-        worksheet.write(row, 1, record['day_of_week'])
-        worksheet.write(row, 2, '是' if record['checkin'] else '否')
-        worksheet.write(row, 3, '是' if record['checkout'] else '否')
-        worksheet.write(row, 4, float(record['income']))
-        worksheet.write(row, 5, record['notes'])
-    
-    workbook.close()
-    output.seek(0)
-    
-    return send_file(
-        output,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=f'收入报告_{start_date}至{end_date}.xlsx'
-    )
-
-@app.route('/blood_pressure_chart')
-@login_required
-def blood_pressure_chart():
-    db = get_db()
-    records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
-        FROM bloodpressure_records 
-        ORDER BY date ASC
-    ''').fetchall()
-    db.close()
-    
-    dates = []
-    morning_high = []
-    morning_low = []
-    afternoon_high = []
-    afternoon_low = []
-    
-    for record in records:
-        try:
-            if any([record['morning_high'], record['morning_low'], 
-                   record['afternoon_high'], record['afternoon_low']]):
-                dates.append(record['date'])
-                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
-                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
-                afternoon_high.append(float(record['afternoon_high']) if record['afternoon_high'] else None)
-                afternoon_low.append(float(record['afternoon_low']) if record['afternoon_low'] else None)
-        except (ValueError, TypeError) as e:
-            print(f"处理记录出错: {str(e)}")
-            continue
-    
-    return render_template('bloodpressurechart.html',
-                         dates=dates,
-                         morning_high=morning_high,
-                         morning_low=morning_low,
-                         afternoon_high=afternoon_high,
-                         afternoon_low=afternoon_low)
-
-@app.route('/blood_pressure_print')
-@login_required
-def blood_pressure_print():
-    # 获取所有记录
-    db = get_db()
-    records = db.execute('''
-        SELECT date, day_of_week, morning_high, morning_low, 
-               afternoon_high, afternoon_low, notes, risk
-        FROM bloodpressure_records 
-        ORDER BY date DESC
-    ''').fetchall()
-    
-    # 计算每条记录的日均值
-    records_with_daily = []
-    for record in records:
-        record_dict = dict(record)
-        if record['morning_high'] and record['afternoon_high']:
-            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-        else:
-            record_dict['daily_high'] = None
-        
-        if record['morning_low'] and record['afternoon_low']:
-            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-        else:
-            record_dict['daily_low'] = None
-        
-        records_with_daily.append(record_dict)
-    
-    db.close()
-    
-    # 创建Excel文件
-    output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output)
-    worksheet = workbook.add_worksheet('血压记录')
-    
-    # 设置列宽
-    worksheet.set_column('A:A', 12)  # 日期
-    worksheet.set_column('B:B', 8)   # 星期
-    worksheet.set_column('C:F', 10)  # 血压值
-    worksheet.set_column('G:G', 10)  # 日均值
-    worksheet.set_column('H:H', 30)  # 备注
-    worksheet.set_column('I:I', 10)  # 风险等级
-    
-    # 写入表头
-    headers = ['日期', '星期', '晨间收缩压', '晨间舒张压', 
-              '晚间收缩压', '晚间舒张压', '日均收缩压/舒张压', '备注', '风险等级']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header)
-    
-    # 写入数据
-    for row, record in enumerate(records_with_daily, 1):
-        worksheet.write(row, 0, record['date'])
-        worksheet.write(row, 1, record['day_of_week'])
-        worksheet.write(row, 2, record['morning_high'])
-        worksheet.write(row, 3, record['morning_low'])
-        worksheet.write(row, 4, record['afternoon_high'])
-        worksheet.write(row, 5, record['afternoon_low'])
-        # 写入日均值
-        if record['daily_high'] and record['daily_low']:
-            worksheet.write(row, 6, f"{record['daily_high']}/{record['daily_low']}")
-        else:
-            worksheet.write(row, 6, '-')
-        worksheet.write(row, 7, record['notes'])
-        worksheet.write(row, 8, record['risk'])
-    
-    workbook.close()
-    output.seek(0)
-    
-    return send_file(
-        output,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=f'血压记录_{datetime.now().strftime("%Y%m%d")}.xlsx'
-    )
-
-@app.route('/blood_pressure2_print')
-@login_required
-def blood_pressure2_print():
-    # 获取所有记录
-    db = get_db()
-    records = db.execute('''
-        SELECT date, day_of_week, morning_high, morning_low, 
-               afternoon_high, afternoon_low, notes, risk
-        FROM bloodpressure2_records 
-        ORDER BY date DESC
-    ''').fetchall()
-    
-    # 计算每条记录的日均值
-    records_with_daily = []
-    for record in records:
-        record_dict = dict(record)
-        if record['morning_high'] and record['afternoon_high']:
-            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-        else:
-            record_dict['daily_high'] = None
-        
-        if record['morning_low'] and record['afternoon_low']:
-            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-        else:
-            record_dict['daily_low'] = None
-        
-        records_with_daily.append(record_dict)
-    
-    db.close()
-    
-    # 创建Excel文件
-    output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output)
-    worksheet = workbook.add_worksheet('血压记录')
-    
-    # 设置列宽
-    worksheet.set_column('A:A', 12)  # 日期
-    worksheet.set_column('B:B', 8)   # 星期
-    worksheet.set_column('C:F', 10)  # 血压值
-    worksheet.set_column('G:G', 10)  # 日均值
-    worksheet.set_column('H:H', 30)  # 备注
-    worksheet.set_column('I:I', 10)  # 风险等级
-    
-    # 写入表头
-    headers = ['日期', '星期', '晨间收缩压', '晨间舒张压', 
-              '晚间收缩压', '晚间舒张压', '日均收缩压/舒张压', '备注', '风险等级']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header)
-    
-    # 写入数据
-    for row, record in enumerate(records_with_daily, 1):
-        worksheet.write(row, 0, record['date'])
-        worksheet.write(row, 1, record['day_of_week'])
-        worksheet.write(row, 2, record['morning_high'])
-        worksheet.write(row, 3, record['morning_low'])
-        worksheet.write(row, 4, record['afternoon_high'])
-        worksheet.write(row, 5, record['afternoon_low'])
-        # 写入日均值
-        if record['daily_high'] and record['daily_low']:
-            worksheet.write(row, 6, f"{record['daily_high']}/{record['daily_low']}")
-        else:
-            worksheet.write(row, 6, '-')
-        worksheet.write(row, 7, record['notes'])
-        worksheet.write(row, 8, record['risk'])
-    
-    workbook.close()
-    output.seek(0)
-    
-    return send_file(
-        output,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=f'血压记录_毛_{datetime.now().strftime("%Y%m%d")}.xlsx'
-    )
-
-@app.route('/blood_pressure3_print')
-@login_required
-def blood_pressure3_print():
-    # 获取所有记录
-    db = get_db()
-    records = db.execute('''
-        SELECT date, day_of_week, morning_high, morning_low, 
-               afternoon_high, afternoon_low, notes, risk
-        FROM bloodpressure3_records 
-        ORDER BY date DESC
-    ''').fetchall()
-    
-    # 计算每条记录的日均值
-    records_with_daily = []
-    for record in records:
-        record_dict = dict(record)
-        if record['morning_high'] and record['afternoon_high']:
-            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-        else:
-            record_dict['daily_high'] = None
-        
-        if record['morning_low'] and record['afternoon_low']:
-            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-        else:
-            record_dict['daily_low'] = None
-        
-        records_with_daily.append(record_dict)
-    
-    db.close()
-    
-    # 创建Excel文件
-    output = io.BytesIO()
-    workbook = xlsxwriter.Workbook(output)
-    worksheet = workbook.add_worksheet('血压记录')
-    
-    # 设置列宽
-    worksheet.set_column('A:A', 12)  # 日期
-    worksheet.set_column('B:B', 8)   # 星期
-    worksheet.set_column('C:F', 10)  # 血压值
-    worksheet.set_column('G:G', 10)  # 日均值
-    worksheet.set_column('H:H', 30)  # 备注
-    worksheet.set_column('I:I', 10)  # 风险等级
-    
-    # 写入表头
-    headers = ['日期', '星期', '晨间收缩压', '晨间舒张压', 
-              '晚间收缩压', '晚间舒张压', '日均收缩压/舒张压', '备注', '风险等级']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header)
-    
-    # 写入数据
-    for row, record in enumerate(records_with_daily, 1):
-        worksheet.write(row, 0, record['date'])
-        worksheet.write(row, 1, record['day_of_week'])
-        worksheet.write(row, 2, record['morning_high'])
-        worksheet.write(row, 3, record['morning_low'])
-        worksheet.write(row, 4, record['afternoon_high'])
-        worksheet.write(row, 5, record['afternoon_low'])
-        # 写入日均值
-        if record['daily_high'] and record['daily_low']:
-            worksheet.write(row, 6, f"{record['daily_high']}/{record['daily_low']}")
-        else:
-            worksheet.write(row, 6, '-')
-        worksheet.write(row, 7, record['notes'])
-        worksheet.write(row, 8, record['risk'])
-    
-    workbook.close()
-    output.seek(0)
-    
-    return send_file(
-        output,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=f'血压记录_祺_{datetime.now().strftime("%Y%m%d")}.xlsx'
-    )
-
-@app.route('/blood_pressure_average')
-@login_required
-def blood_pressure_average():
-    # 获取日期范围参数，默认最近30天
-    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
-    start_date = request.args.get('start_date', 
-                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
-    
-    # 获取指定日期范围的记录
-    db = get_db()
-    records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low 
-        FROM bloodpressure_records 
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date ASC
-    ''', [start_date, end_date]).fetchall()
-    db.close()
-    
-    # 计算平均值
-    morning_high_sum = morning_high_count = 0
-    morning_low_sum = morning_low_count = 0
-    afternoon_high_sum = afternoon_high_count = 0
-    afternoon_low_sum = afternoon_low_count = 0
-    daily_high_sum = daily_high_count = 0
-    daily_low_sum = daily_low_count = 0
-    
-    for record in records:
-        # 计算每天的平均值
-        daily_high = daily_low = None
-        high_count = low_count = 0
-        
-        if record['morning_high'] and record['afternoon_high']:
-            daily_high = (record['morning_high'] + record['afternoon_high']) / 2
-            daily_high_sum += daily_high
-            daily_high_count += 1
-        
-        if record['morning_low'] and record['afternoon_low']:
-            daily_low = (record['morning_low'] + record['afternoon_low']) / 2
-            daily_low_sum += daily_low
-            daily_low_count += 1
-        
-        if record['morning_high']:
-            morning_high_sum += record['morning_high']
-            morning_high_count += 1
-        if record['morning_low']:
-            morning_low_sum += record['morning_low']
-            morning_low_count += 1
-        if record['afternoon_high']:
-            afternoon_high_sum += record['afternoon_high']
-            afternoon_high_count += 1
-        if record['afternoon_low']:
-            afternoon_low_sum += record['afternoon_low']
-            afternoon_low_count += 1
-    
-    # 计算平均值，避免除以零
-    averages = {
-        'morning_high': round(morning_high_sum / morning_high_count, 1) if morning_high_count > 0 else 0,
-        'morning_low': round(morning_low_sum / morning_low_count, 1) if morning_low_count > 0 else 0,
-        'afternoon_high': round(afternoon_high_sum / afternoon_high_count, 1) if afternoon_high_count > 0 else 0,
-        'afternoon_low': round(afternoon_low_sum / afternoon_low_count, 1) if afternoon_low_count > 0 else 0,
-        'daily_high': round(daily_high_sum / daily_high_count, 1) if daily_high_count > 0 else 0,
-        'daily_low': round(daily_low_sum / daily_low_count, 1) if daily_low_count > 0 else 0
-    }
-    
-    return render_template('bloodpressureaverage.html',
-                         averages=averages,
-                         days=len(records),
-                         start_date=start_date,
-                         end_date=end_date)
+                         current_page=page,
+                         total_pages=total_pages,
+                         today=datetime.now().strftime('%Y-%m-%d'))
 
 @app.route('/blood_pressure2_chart')
 @login_required
 def blood_pressure2_chart():
+    owner_id = 2  # 血压监测-毛
     db = get_db()
+    
+    # 获取所有记录并合并
     records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
-        FROM bloodpressure2_records 
-        ORDER BY date ASC
-    ''').fetchall()
-    db.close()
+        WITH all_dates AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            ORDER BY date ASC
+        )
+        SELECT 
+            d.date,
+            m.morning_high,
+            m.morning_low,
+            n.night_high,
+            n.night_low,
+            c.average
+        FROM all_dates d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+        LEFT JOIN bloodpressure_calculation_records c 
+            ON d.date = c.date AND c.owner_id = ?
+    ''', [owner_id] * 5).fetchall()
     
     dates = []
     morning_high = []
     morning_low = []
-    afternoon_high = []
-    afternoon_low = []
+    night_high = []
+    night_low = []
+    averages = []
     
     for record in records:
         try:
             if any([record['morning_high'], record['morning_low'], 
-                   record['afternoon_high'], record['afternoon_low']]):
+                   record['night_high'], record['night_low']]):
                 dates.append(record['date'])
                 morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
                 morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
-                afternoon_high.append(float(record['afternoon_high']) if record['afternoon_high'] else None)
-                afternoon_low.append(float(record['afternoon_low']) if record['afternoon_low'] else None)
-        except (ValueError, TypeError) as e:
+                night_high.append(float(record['night_high']) if record['night_high'] else None)
+                night_low.append(float(record['night_low']) if record['night_low'] else None)
+                
+                if record['average']:
+                    avg_parts = record['average'].split('/')
+                    averages.append({
+                        'high': float(avg_parts[0]),
+                        'low': float(avg_parts[1])
+                    })
+                else:
+                    averages.append(None)
+        except (ValueError, TypeError, IndexError) as e:
             print(f"处理记录出错: {str(e)}")
             continue
     
@@ -1560,185 +1457,72 @@ def blood_pressure2_chart():
                          dates=dates,
                          morning_high=morning_high,
                          morning_low=morning_low,
-                         afternoon_high=afternoon_high,
-                         afternoon_low=afternoon_low)
+                         night_high=night_high,
+                         night_low=night_low,
+                         averages=averages)
 
-@app.route('/blood_pressure3_chart')
+@app.route('/blood_pressure3_detail')
 @login_required
-def blood_pressure3_chart():
+def blood_pressure3_detail():
+    page = request.args.get('page', 1, type=int)
+    per_page = 10  # 每页显示10条记录
+    offset = (page - 1) * per_page
+    owner_id = 3  # 血压监测-祺
+    
     db = get_db()
+    
+    # 获取总记录数
+    total_records = db.execute('''
+        SELECT COUNT(DISTINCT d.date) 
+        FROM (
+            SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+            UNION
+            SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+        ) d
+    ''', [owner_id, owner_id]).fetchone()[0]
+    
+    # 计算总页数
+    total_pages = (total_records + per_page - 1) // per_page
+    
+    # 获取当前页的记录
     records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low
-        FROM bloodpressure3_records 
-        ORDER BY date ASC
-    ''').fetchall()
-    db.close()
+        WITH all_dates AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            ORDER BY date DESC
+            LIMIT ? OFFSET ?
+        )
+        SELECT 
+            d.date,
+            strftime('%w', d.date) as day_of_week,
+            m.morning_high,
+            m.morning_low,
+            n.night_high,
+            n.night_low,
+            c.average,
+            c.risk,
+            nt.notes
+        FROM all_dates d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+        LEFT JOIN bloodpressure_calculation_records c 
+            ON d.date = c.date AND c.owner_id = ?
+        LEFT JOIN bloodpressure_notes_records nt 
+            ON d.date = nt.date AND nt.owner_id = ?
+        ORDER BY d.date DESC
+    ''', [owner_id, owner_id, per_page, offset, owner_id, owner_id, owner_id, owner_id]).fetchall()
     
-    dates = []
-    morning_high = []
-    morning_low = []
-    afternoon_high = []
-    afternoon_low = []
-    
-    for record in records:
-        try:
-            if any([record['morning_high'], record['morning_low'], 
-                   record['afternoon_high'], record['afternoon_low']]):
-                dates.append(record['date'])
-                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
-                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
-                afternoon_high.append(float(record['afternoon_high']) if record['afternoon_high'] else None)
-                afternoon_low.append(float(record['afternoon_low']) if record['afternoon_low'] else None)
-        except (ValueError, TypeError) as e:
-            print(f"处理记录出错: {str(e)}")
-            continue
-    
-    return render_template('bloodpressure3chart.html',
-                         dates=dates,
-                         morning_high=morning_high,
-                         morning_low=morning_low,
-                         afternoon_high=afternoon_high,
-                         afternoon_low=afternoon_low)
-
-@app.route('/blood_pressure2_average')
-@login_required
-def blood_pressure2_average():
-    # 获取日期范围参数，默认最近30天
-    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
-    start_date = request.args.get('start_date', 
-                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
-    
-    # 获取指定日期范围的记录
-    db = get_db()
-    records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low 
-        FROM bloodpressure2_records 
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date ASC
-    ''', [start_date, end_date]).fetchall()
-    db.close()
-    
-    # 计算平均值
-    morning_high_sum = morning_high_count = 0
-    morning_low_sum = morning_low_count = 0
-    afternoon_high_sum = afternoon_high_count = 0
-    afternoon_low_sum = afternoon_low_count = 0
-    daily_high_sum = daily_high_count = 0
-    daily_low_sum = daily_low_count = 0
-    
-    for record in records:
-        # 计算每天的平均值
-        daily_high = daily_low = None
-        high_count = low_count = 0
-        
-        if record['morning_high'] and record['afternoon_high']:
-            daily_high = (record['morning_high'] + record['afternoon_high']) / 2
-            daily_high_sum += daily_high
-            daily_high_count += 1
-        
-        if record['morning_low'] and record['afternoon_low']:
-            daily_low = (record['morning_low'] + record['afternoon_low']) / 2
-            daily_low_sum += daily_low
-            daily_low_count += 1
-        
-        if record['morning_high']:
-            morning_high_sum += record['morning_high']
-            morning_high_count += 1
-        if record['morning_low']:
-            morning_low_sum += record['morning_low']
-            morning_low_count += 1
-        if record['afternoon_high']:
-            afternoon_high_sum += record['afternoon_high']
-            afternoon_high_count += 1
-        if record['afternoon_low']:
-            afternoon_low_sum += record['afternoon_low']
-            afternoon_low_count += 1
-    
-    # 计算平均值，避免除以零
-    averages = {
-        'morning_high': round(morning_high_sum / morning_high_count, 1) if morning_high_count > 0 else 0,
-        'morning_low': round(morning_low_sum / morning_low_count, 1) if morning_low_count > 0 else 0,
-        'afternoon_high': round(afternoon_high_sum / afternoon_high_count, 1) if afternoon_high_count > 0 else 0,
-        'afternoon_low': round(afternoon_low_sum / afternoon_low_count, 1) if afternoon_low_count > 0 else 0,
-        'daily_high': round(daily_high_sum / daily_high_count, 1) if daily_high_count > 0 else 0,
-        'daily_low': round(daily_low_sum / daily_low_count, 1) if daily_low_count > 0 else 0
-    }
-    
-    return render_template('bloodpressure2average.html',
-                         averages=averages,
-                         days=len(records),
-                         start_date=start_date,
-                         end_date=end_date)
-
-@app.route('/blood_pressure3_average')
-@login_required
-def blood_pressure3_average():
-    # 获取日期范围参数，默认最近30天
-    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
-    start_date = request.args.get('start_date', 
-                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
-    
-    # 获取指定日期范围的记录
-    db = get_db()
-    records = db.execute('''
-        SELECT date, morning_high, morning_low, afternoon_high, afternoon_low 
-        FROM bloodpressure3_records 
-        WHERE date BETWEEN ? AND ?
-        ORDER BY date ASC
-    ''', [start_date, end_date]).fetchall()
-    db.close()
-    
-    # 计算平均值
-    morning_high_sum = morning_high_count = 0
-    morning_low_sum = morning_low_count = 0
-    afternoon_high_sum = afternoon_high_count = 0
-    afternoon_low_sum = afternoon_low_count = 0
-    daily_high_sum = daily_high_count = 0
-    daily_low_sum = daily_low_count = 0
-    
-    for record in records:
-        # 计算每天的平均值
-        daily_high = daily_low = None
-        high_count = low_count = 0
-        
-        if record['morning_high'] and record['afternoon_high']:
-            daily_high = (record['morning_high'] + record['afternoon_high']) / 2
-            daily_high_sum += daily_high
-            daily_high_count += 1
-        
-        if record['morning_low'] and record['afternoon_low']:
-            daily_low = (record['morning_low'] + record['afternoon_low']) / 2
-            daily_low_sum += daily_low
-            daily_low_count += 1
-        
-        if record['morning_high']:
-            morning_high_sum += record['morning_high']
-            morning_high_count += 1
-        if record['morning_low']:
-            morning_low_sum += record['morning_low']
-            morning_low_count += 1
-        if record['afternoon_high']:
-            afternoon_high_sum += record['afternoon_high']
-            afternoon_high_count += 1
-        if record['afternoon_low']:
-            afternoon_low_sum += record['afternoon_low']
-            afternoon_low_count += 1
-    
-    # 计算平均值，避免除以零
-    averages = {
-        'morning_high': round(morning_high_sum / morning_high_count, 1) if morning_high_count > 0 else 0,
-        'morning_low': round(morning_low_sum / morning_low_count, 1) if morning_low_count > 0 else 0,
-        'afternoon_high': round(afternoon_high_sum / afternoon_high_count, 1) if afternoon_high_count > 0 else 0,
-        'afternoon_low': round(afternoon_low_sum / afternoon_low_count, 1) if afternoon_low_count > 0 else 0,
-        'daily_high': round(daily_high_sum / daily_high_count, 1) if daily_high_count > 0 else 0,
-        'daily_low': round(daily_low_sum / daily_low_count, 1) if daily_low_count > 0 else 0
-    }
-    
-    return render_template('bloodpressure3average.html',
-                         averages=averages,
-                         days=len(records),
-                         start_date=start_date,
-                         end_date=end_date)
+    return render_template('bloodpressure3detail.html',
+                         records=records,
+                         current_page=page,
+                         total_pages=total_pages,
+                         today=datetime.now().strftime('%Y-%m-%d'))
 
 @app.route('/blood_pressure_print_range')
 @login_required
@@ -1960,48 +1744,64 @@ def blood_pressure3_print_selected():
 @login_required
 def blood_pressure_detail():
     page = request.args.get('page', 1, type=int)
-    per_page = 10
+    per_page = 10  # 每页显示10条记录
+    offset = (page - 1) * per_page
+    owner_id = 1  # 血压监测
     
     db = get_db()
-    total = db.execute('SELECT COUNT(*) FROM bloodpressure_records').fetchone()[0]
-    total_pages = (total + per_page - 1) // per_page
     
-    offset = (page - 1) * per_page
-    records = db.execute('''SELECT * FROM bloodpressure_records 
-                           ORDER BY date DESC LIMIT ? OFFSET ?''',
-                        [per_page, offset]).fetchall()
+    # 获取总记录数
+    total_records = db.execute('''
+        SELECT COUNT(DISTINCT d.date) 
+        FROM (
+            SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+            UNION
+            SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+        ) d
+    ''', [owner_id, owner_id]).fetchone()[0]
     
-    # 将记录转换为字典列表，并计算日均值
-    records_with_daily = []
-    for record in records:
-        record_dict = dict(record)
-        # 修改日均值计算逻辑
-        if record['morning_high'] and record['afternoon_high']:
-            record_dict['daily_high'] = round((record['morning_high'] + record['afternoon_high']) / 2, 1)
-        elif record['morning_high']:
-            record_dict['daily_high'] = record['morning_high']
-        elif record['afternoon_high']:
-            record_dict['daily_high'] = record['afternoon_high']
-        else:
-            record_dict['daily_high'] = None
-        
-        if record['morning_low'] and record['afternoon_low']:
-            record_dict['daily_low'] = round((record['morning_low'] + record['afternoon_low']) / 2, 1)
-        elif record['morning_low']:
-            record_dict['daily_low'] = record['morning_low']
-        elif record['afternoon_low']:
-            record_dict['daily_low'] = record['afternoon_low']
-        else:
-            record_dict['daily_low'] = None
-        
-        records_with_daily.append(record_dict)
+    # 计算总页数
+    total_pages = (total_records + per_page - 1) // per_page
     
-    db.close()
+    # 获取当前页的记录
+    records = db.execute('''
+        WITH all_dates AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            ORDER BY date DESC
+            LIMIT ? OFFSET ?
+        )
+        SELECT 
+            d.date,
+            strftime('%w', d.date) as day_of_week,
+            m.morning_high,
+            m.morning_low,
+            n.night_high,
+            n.night_low,
+            c.average,
+            c.risk,
+            nt.notes
+        FROM all_dates d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+        LEFT JOIN bloodpressure_calculation_records c 
+            ON d.date = c.date AND c.owner_id = ?
+        LEFT JOIN bloodpressure_notes_records nt 
+            ON d.date = nt.date AND nt.owner_id = ?
+        ORDER BY d.date DESC
+    ''', [owner_id, owner_id, per_page, offset, owner_id, owner_id, owner_id, owner_id]).fetchall()
     
     return render_template('bloodpressuredetail.html',
-                         records=records_with_daily,
+                         records=records,
                          current_page=page,
-                         total_pages=total_pages)
+                         total_pages=total_pages,
+                         today=datetime.now().strftime('%Y-%m-%d'))
 
 @app.route('/update_today_average')
 @login_required
@@ -2154,6 +1954,709 @@ def checkin_records():
                          records=formatted_records,
                          current_page=page,
                          total_pages=total_pages)
+
+@app.route('/calculate_income_range')
+@login_required
+def calculate_income_range():
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            return jsonify({'error': '缺少日期参数', 'total': 0})
+        
+        db = get_db()
+        # 修改查询以根据签到签出状态计算收入
+        result = db.execute('''
+            WITH daily_records AS (
+                SELECT 
+                    date,
+                    MAX(checkin) as has_checkin,
+                    MAX(checkout) as has_checkout
+                FROM checkin_records 
+                WHERE date BETWEEN ? AND ?
+                GROUP BY date
+            )
+            SELECT SUM(
+                CASE 
+                    WHEN has_checkin = 1 AND has_checkout = 1 THEN 75 
+                    ELSE 0 
+                END
+            ) as total
+            FROM daily_records
+        ''', [start_date, end_date]).fetchone()
+        
+        total = result['total'] if result['total'] is not None else 0
+        db.close()
+        
+        return jsonify({
+            'success': True,
+            'total': total,
+            'start_date': start_date,
+            'end_date': end_date
+        })
+    except Exception as e:
+        print(f"计算收入范围时出错: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'total': 0
+        }), 500
+
+@app.route('/download_blood_pressure_table')
+@login_required
+def download_blood_pressure_table():
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        owner_id = 1  # 血压监测
+        
+        db = get_db()
+        records = db.execute('''
+            WITH all_dates AS (
+                SELECT DISTINCT date 
+                FROM (
+                    SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                    UNION
+                    SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+                )
+                WHERE date BETWEEN ? AND ?
+                ORDER BY date DESC
+            )
+            SELECT 
+                d.date,
+                strftime('%w', d.date) as day_of_week,
+                m.morning_high,
+                m.morning_low,
+                n.night_high,
+                n.night_low,
+                c.average,
+                c.risk,
+                nt.notes
+            FROM all_dates d
+            LEFT JOIN morning_bloodpressure_records m 
+                ON d.date = m.date AND m.owner_id = ?
+            LEFT JOIN night_bloodpressure_records n 
+                ON d.date = n.date AND n.owner_id = ?
+            LEFT JOIN bloodpressure_calculation_records c 
+                ON d.date = c.date AND c.owner_id = ?
+            LEFT JOIN bloodpressure_notes_records nt 
+                ON d.date = nt.date AND nt.owner_id = ?
+        ''', [owner_id, owner_id, start_date, end_date, owner_id, owner_id, owner_id, owner_id]).fetchall()
+        
+        # 创建Excel文件
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet('血压记录')
+        
+        # 设置列宽
+        worksheet.set_column('A:A', 12)  # 日期
+        worksheet.set_column('B:B', 8)   # 星期
+        worksheet.set_column('C:F', 10)  # 血压值
+        worksheet.set_column('G:G', 12)  # 日均值
+        worksheet.set_column('H:H', 8)   # 风险等级
+        worksheet.set_column('I:I', 30)  # 备注
+        
+        # 添加标题格式
+        title_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#f8f9fa',
+            'border': 1
+        })
+        
+        # 添加数据格式
+        data_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1
+        })
+        
+        # 写入表头
+        headers = ['日期', '星期', '晨间收缩压', '晨间舒张压', 
+                  '晚间收缩压', '晚间舒张压', '日均血压', '风险等级', '备注']
+        for col, header in enumerate(headers):
+            worksheet.write(0, col, header, title_format)
+        
+        # 写入数据
+        weekday_map = {'0': '星期日', '1': '星期一', '2': '星期二', 
+                      '3': '星期三', '4': '星期四', '5': '星期五', '6': '星期六'}
+        
+        for row, record in enumerate(records, 1):
+            worksheet.write(row, 0, record['date'], data_format)
+            worksheet.write(row, 1, weekday_map.get(record['day_of_week'], ''), data_format)
+            worksheet.write(row, 2, record['morning_high'], data_format)
+            worksheet.write(row, 3, record['morning_low'], data_format)
+            worksheet.write(row, 4, record['night_high'], data_format)
+            worksheet.write(row, 5, record['night_low'], data_format)
+            worksheet.write(row, 6, record['average'] if record['average'] else '-', data_format)
+            worksheet.write(row, 7, record['risk'] if record['risk'] else '-', data_format)
+            worksheet.write(row, 8, record['notes'] if record['notes'] else '', data_format)
+        
+        workbook.close()
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'血压记录_{start_date}至{end_date}.xlsx'
+        )
+        
+    except Exception as e:
+        print(f"下载血压记录表格时出错: {str(e)}")
+        flash('下载表格时出错', 'error')
+        return redirect(url_for('blood_pressure_detail'))
+
+@app.route('/download_blood_pressure3_table')
+@login_required
+def download_blood_pressure3_table():
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        owner_id = 3  # 血压监测-祺
+        
+        db = get_db()
+        records = db.execute('''
+            WITH all_dates AS (
+                SELECT DISTINCT date 
+                FROM (
+                    SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                    UNION
+                    SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+                )
+                WHERE date BETWEEN ? AND ?
+                ORDER BY date DESC
+            )
+            SELECT 
+                d.date,
+                strftime('%w', d.date) as day_of_week,
+                m.morning_high,
+                m.morning_low,
+                n.night_high,
+                n.night_low,
+                c.average,
+                c.risk,
+                nt.notes
+            FROM all_dates d
+            LEFT JOIN morning_bloodpressure_records m 
+                ON d.date = m.date AND m.owner_id = ?
+            LEFT JOIN night_bloodpressure_records n 
+                ON d.date = n.date AND n.owner_id = ?
+            LEFT JOIN bloodpressure_calculation_records c 
+                ON d.date = c.date AND c.owner_id = ?
+            LEFT JOIN bloodpressure_notes_records nt 
+                ON d.date = nt.date AND nt.owner_id = ?
+        ''', [owner_id, owner_id, start_date, end_date, owner_id, owner_id, owner_id, owner_id]).fetchall()
+        
+        # 创建Excel文件
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet('血压记录')
+        
+        # 设置列宽
+        worksheet.set_column('A:A', 12)  # 日期
+        worksheet.set_column('B:B', 8)   # 星期
+        worksheet.set_column('C:F', 10)  # 血压值
+        worksheet.set_column('G:G', 12)  # 日均值
+        worksheet.set_column('H:H', 8)   # 风险等级
+        worksheet.set_column('I:I', 30)  # 备注
+        
+        # 添加标题格式
+        title_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#f8f9fa',
+            'border': 1
+        })
+        
+        # 添加数据格式
+        data_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1
+        })
+        
+        # 写入表头
+        headers = ['日期', '星期', '晨间收缩压', '晨间舒张压', 
+                  '晚间收缩压', '晚间舒张压', '日均血压', '风险等级', '备注']
+        for col, header in enumerate(headers):
+            worksheet.write(0, col, header, title_format)
+        
+        # 写入数据
+        weekday_map = {'0': '星期日', '1': '星期一', '2': '星期二', 
+                      '3': '星期三', '4': '星期四', '5': '星期五', '6': '星期六'}
+        
+        for row, record in enumerate(records, 1):
+            worksheet.write(row, 0, record['date'], data_format)
+            worksheet.write(row, 1, weekday_map.get(record['day_of_week'], ''), data_format)
+            worksheet.write(row, 2, record['morning_high'], data_format)
+            worksheet.write(row, 3, record['morning_low'], data_format)
+            worksheet.write(row, 4, record['night_high'], data_format)
+            worksheet.write(row, 5, record['night_low'], data_format)
+            worksheet.write(row, 6, record['average'] if record['average'] else '-', data_format)
+            worksheet.write(row, 7, record['risk'] if record['risk'] else '-', data_format)
+            worksheet.write(row, 8, record['notes'] if record['notes'] else '', data_format)
+        
+        workbook.close()
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'血压记录_祺_{start_date}至{end_date}.xlsx'
+        )
+        
+    except Exception as e:
+        print(f"下载血压记录表格时出错: {str(e)}")
+        flash('下载表格时出错', 'error')
+        return redirect(url_for('blood_pressure3_detail'))
+
+@app.route('/blood_pressure3_average')
+@login_required
+def blood_pressure3_average():
+    owner_id = 3  # 血压监测-祺
+    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
+    start_date = request.args.get('start_date', 
+                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
+    
+    db = get_db()
+    
+    # 获取指定日期范围的统计数据
+    stats = db.execute('''
+        WITH date_range AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            WHERE date BETWEEN ? AND ?
+        )
+        SELECT 
+            AVG(m.morning_high) as morning_high_avg,
+            AVG(m.morning_low) as morning_low_avg,
+            AVG(n.night_high) as night_high_avg,
+            AVG(n.night_low) as night_low_avg,
+            COUNT(DISTINCT d.date) as total_days,
+            AVG(CASE 
+                WHEN m.morning_high IS NOT NULL AND n.night_high IS NOT NULL 
+                THEN (m.morning_high + n.night_high) / 2
+                WHEN m.morning_high IS NOT NULL THEN m.morning_high
+                WHEN n.night_high IS NOT NULL THEN n.night_high
+            END) as daily_high_avg,
+            AVG(CASE 
+                WHEN m.morning_low IS NOT NULL AND n.night_low IS NOT NULL 
+                THEN (m.morning_low + n.night_low) / 2
+                WHEN m.morning_low IS NOT NULL THEN m.morning_low
+                WHEN n.night_low IS NOT NULL THEN n.night_low
+            END) as daily_low_avg
+        FROM date_range d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+    ''', [owner_id, owner_id, start_date, end_date, owner_id, owner_id]).fetchone()
+    
+    # 计算平均值
+    averages = {
+        'morning_high': round(stats['morning_high_avg'], 1) if stats['morning_high_avg'] else 0,
+        'morning_low': round(stats['morning_low_avg'], 1) if stats['morning_low_avg'] else 0,
+        'night_high': round(stats['night_high_avg'], 1) if stats['night_high_avg'] else 0,
+        'night_low': round(stats['night_low_avg'], 1) if stats['night_low_avg'] else 0,
+        'daily_high': round(stats['daily_high_avg'], 1) if stats['daily_high_avg'] else 0,
+        'daily_low': round(stats['daily_low_avg'], 1) if stats['daily_low_avg'] else 0
+    }
+    
+    # 计算总体风险等级
+    risk = calculate_risk(averages['daily_high'], averages['daily_low'])
+    
+    return render_template('bloodpressure3average.html',
+                         averages=averages,
+                         days=stats['total_days'],
+                         start_date=start_date,
+                         end_date=end_date,
+                         risk=risk)
+
+@app.route('/blood_pressure_average')
+@login_required
+def blood_pressure_average():
+    owner_id = 1  # 血压监测
+    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
+    start_date = request.args.get('start_date', 
+                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
+    
+    db = get_db()
+    
+    # 获取指定日期范围的统计数据
+    stats = db.execute('''
+        WITH date_range AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            WHERE date BETWEEN ? AND ?
+        )
+        SELECT 
+            AVG(m.morning_high) as morning_high_avg,
+            AVG(m.morning_low) as morning_low_avg,
+            AVG(n.night_high) as night_high_avg,
+            AVG(n.night_low) as night_low_avg,
+            COUNT(DISTINCT d.date) as total_days,
+            AVG(CASE 
+                WHEN m.morning_high IS NOT NULL AND n.night_high IS NOT NULL 
+                THEN (m.morning_high + n.night_high) / 2
+                WHEN m.morning_high IS NOT NULL THEN m.morning_high
+                WHEN n.night_high IS NOT NULL THEN n.night_high
+            END) as daily_high_avg,
+            AVG(CASE 
+                WHEN m.morning_low IS NOT NULL AND n.night_low IS NOT NULL 
+                THEN (m.morning_low + n.night_low) / 2
+                WHEN m.morning_low IS NOT NULL THEN m.morning_low
+                WHEN n.night_low IS NOT NULL THEN n.night_low
+            END) as daily_low_avg
+        FROM date_range d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+    ''', [owner_id, owner_id, start_date, end_date, owner_id, owner_id]).fetchone()
+    
+    # 计算平均值
+    averages = {
+        'morning_high': round(stats['morning_high_avg'], 1) if stats['morning_high_avg'] else 0,
+        'morning_low': round(stats['morning_low_avg'], 1) if stats['morning_low_avg'] else 0,
+        'night_high': round(stats['night_high_avg'], 1) if stats['night_high_avg'] else 0,
+        'night_low': round(stats['night_low_avg'], 1) if stats['night_low_avg'] else 0,
+        'daily_high': round(stats['daily_high_avg'], 1) if stats['daily_high_avg'] else 0,
+        'daily_low': round(stats['daily_low_avg'], 1) if stats['daily_low_avg'] else 0
+    }
+    
+    # 计算总体风险等级
+    risk = calculate_risk(averages['daily_high'], averages['daily_low'])
+    
+    return render_template('bloodpressureaverage.html',
+                         averages=averages,
+                         days=stats['total_days'],
+                         start_date=start_date,
+                         end_date=end_date,
+                         risk=risk)
+
+@app.route('/blood_pressure_chart')
+@login_required
+def blood_pressure_chart():
+    owner_id = 1  # 血压监测
+    db = get_db()
+    
+    # 获取所有记录并合并
+    records = db.execute('''
+        WITH all_dates AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            ORDER BY date ASC
+        )
+        SELECT 
+            d.date,
+            m.morning_high,
+            m.morning_low,
+            n.night_high,
+            n.night_low,
+            c.average
+        FROM all_dates d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+        LEFT JOIN bloodpressure_calculation_records c 
+            ON d.date = c.date AND c.owner_id = ?
+    ''', [owner_id] * 5).fetchall()
+    
+    dates = []
+    morning_high = []
+    morning_low = []
+    night_high = []
+    night_low = []
+    averages = []
+    
+    for record in records:
+        try:
+            if any([record['morning_high'], record['morning_low'], 
+                   record['night_high'], record['night_low']]):
+                dates.append(record['date'])
+                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
+                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
+                night_high.append(float(record['night_high']) if record['night_high'] else None)
+                night_low.append(float(record['night_low']) if record['night_low'] else None)
+                
+                if record['average']:
+                    avg_parts = record['average'].split('/')
+                    averages.append({
+                        'high': float(avg_parts[0]),
+                        'low': float(avg_parts[1])
+                    })
+                else:
+                    averages.append(None)
+        except (ValueError, TypeError, IndexError) as e:
+            print(f"处理记录出错: {str(e)}")
+            continue
+    
+    return render_template('bloodpressurechart.html',
+                         dates=dates,
+                         morning_high=morning_high,
+                         morning_low=morning_low,
+                         night_high=night_high,
+                         night_low=night_low,
+                         averages=averages)
+
+@app.route('/blood_pressure3_chart')
+@login_required
+def blood_pressure3_chart():
+    owner_id = 3  # 血压监测-祺
+    db = get_db()
+    
+    # 获取所有记录并合并
+    records = db.execute('''
+        WITH all_dates AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            ORDER BY date ASC
+        )
+        SELECT 
+            d.date,
+            m.morning_high,
+            m.morning_low,
+            n.night_high,
+            n.night_low,
+            c.average
+        FROM all_dates d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+        LEFT JOIN bloodpressure_calculation_records c 
+            ON d.date = c.date AND c.owner_id = ?
+    ''', [owner_id] * 5).fetchall()
+    
+    dates = []
+    morning_high = []
+    morning_low = []
+    night_high = []
+    night_low = []
+    averages = []
+    
+    for record in records:
+        try:
+            if any([record['morning_high'], record['morning_low'], 
+                   record['night_high'], record['night_low']]):
+                dates.append(record['date'])
+                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
+                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
+                night_high.append(float(record['night_high']) if record['night_high'] else None)
+                night_low.append(float(record['night_low']) if record['night_low'] else None)
+                
+                if record['average']:
+                    avg_parts = record['average'].split('/')
+                    averages.append({
+                        'high': float(avg_parts[0]),
+                        'low': float(avg_parts[1])
+                    })
+                else:
+                    averages.append(None)
+        except (ValueError, TypeError, IndexError) as e:
+            print(f"处理记录出错: {str(e)}")
+            continue
+    
+    return render_template('bloodpressure3chart.html',
+                         dates=dates,
+                         morning_high=morning_high,
+                         morning_low=morning_low,
+                         night_high=night_high,
+                         night_low=night_low,
+                         averages=averages)
+
+@app.route('/blood_pressure2_average')
+@login_required
+def blood_pressure2_average():
+    owner_id = 2  # 血压监测-毛
+    end_date = request.args.get('end_date', datetime.now().strftime('%Y-%m-%d'))
+    start_date = request.args.get('start_date', 
+                                (datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=30)).strftime('%Y-%m-%d'))
+    
+    db = get_db()
+    
+    # 获取指定日期范围的统计数据
+    stats = db.execute('''
+        WITH date_range AS (
+            SELECT DISTINCT date 
+            FROM (
+                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                UNION
+                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+            )
+            WHERE date BETWEEN ? AND ?
+        )
+        SELECT 
+            AVG(m.morning_high) as morning_high_avg,
+            AVG(m.morning_low) as morning_low_avg,
+            AVG(n.night_high) as night_high_avg,
+            AVG(n.night_low) as night_low_avg,
+            COUNT(DISTINCT d.date) as total_days,
+            AVG(CASE 
+                WHEN m.morning_high IS NOT NULL AND n.night_high IS NOT NULL 
+                THEN (m.morning_high + n.night_high) / 2
+                WHEN m.morning_high IS NOT NULL THEN m.morning_high
+                WHEN n.night_high IS NOT NULL THEN n.night_high
+            END) as daily_high_avg,
+            AVG(CASE 
+                WHEN m.morning_low IS NOT NULL AND n.night_low IS NOT NULL 
+                THEN (m.morning_low + n.night_low) / 2
+                WHEN m.morning_low IS NOT NULL THEN m.morning_low
+                WHEN n.night_low IS NOT NULL THEN n.night_low
+            END) as daily_low_avg
+        FROM date_range d
+        LEFT JOIN morning_bloodpressure_records m 
+            ON d.date = m.date AND m.owner_id = ?
+        LEFT JOIN night_bloodpressure_records n 
+            ON d.date = n.date AND n.owner_id = ?
+    ''', [owner_id, owner_id, start_date, end_date, owner_id, owner_id]).fetchone()
+    
+    # 计算平均值
+    averages = {
+        'morning_high': round(stats['morning_high_avg'], 1) if stats['morning_high_avg'] else 0,
+        'morning_low': round(stats['morning_low_avg'], 1) if stats['morning_low_avg'] else 0,
+        'night_high': round(stats['night_high_avg'], 1) if stats['night_high_avg'] else 0,
+        'night_low': round(stats['night_low_avg'], 1) if stats['night_low_avg'] else 0,
+        'daily_high': round(stats['daily_high_avg'], 1) if stats['daily_high_avg'] else 0,
+        'daily_low': round(stats['daily_low_avg'], 1) if stats['daily_low_avg'] else 0
+    }
+    
+    # 计算总体风险等级
+    risk = calculate_risk(averages['daily_high'], averages['daily_low'])
+    
+    return render_template('bloodpressure2average.html',
+                         averages=averages,
+                         days=stats['total_days'],
+                         start_date=start_date,
+                         end_date=end_date,
+                         risk=risk)
+
+@app.route('/download_blood_pressure2_table')
+@login_required
+def download_blood_pressure2_table():
+    try:
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        owner_id = 2  # 血压监测-毛
+        
+        db = get_db()
+        records = db.execute('''
+            WITH all_dates AS (
+                SELECT DISTINCT date 
+                FROM (
+                    SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                    UNION
+                    SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+                )
+                WHERE date BETWEEN ? AND ?
+                ORDER BY date DESC
+            )
+            SELECT 
+                d.date,
+                strftime('%w', d.date) as day_of_week,
+                m.morning_high,
+                m.morning_low,
+                n.night_high,
+                n.night_low,
+                c.average,
+                c.risk,
+                nt.notes
+            FROM all_dates d
+            LEFT JOIN morning_bloodpressure_records m 
+                ON d.date = m.date AND m.owner_id = ?
+            LEFT JOIN night_bloodpressure_records n 
+                ON d.date = n.date AND n.owner_id = ?
+            LEFT JOIN bloodpressure_calculation_records c 
+                ON d.date = c.date AND c.owner_id = ?
+            LEFT JOIN bloodpressure_notes_records nt 
+                ON d.date = nt.date AND nt.owner_id = ?
+        ''', [owner_id, owner_id, start_date, end_date, owner_id, owner_id, owner_id, owner_id]).fetchall()
+        
+        # 创建Excel文件
+        output = io.BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet('血压记录')
+        
+        # 设置列宽
+        worksheet.set_column('A:A', 12)  # 日期
+        worksheet.set_column('B:B', 8)   # 星期
+        worksheet.set_column('C:F', 10)  # 血压值
+        worksheet.set_column('G:G', 12)  # 日均值
+        worksheet.set_column('H:H', 8)   # 风险等级
+        worksheet.set_column('I:I', 30)  # 备注
+        
+        # 添加标题格式
+        title_format = workbook.add_format({
+            'bold': True,
+            'align': 'center',
+            'valign': 'vcenter',
+            'bg_color': '#f8f9fa',
+            'border': 1
+        })
+        
+        # 添加数据格式
+        data_format = workbook.add_format({
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1
+        })
+        
+        # 写入表头
+        headers = ['日期', '星期', '晨间收缩压', '晨间舒张压', 
+                  '晚间收缩压', '晚间舒张压', '日均血压', '风险等级', '备注']
+        for col, header in enumerate(headers):
+            worksheet.write(0, col, header, title_format)
+        
+        # 写入数据
+        weekday_map = {'0': '星期日', '1': '星期一', '2': '星期二', 
+                      '3': '星期三', '4': '星期四', '5': '星期五', '6': '星期六'}
+        
+        for row, record in enumerate(records, 1):
+            worksheet.write(row, 0, record['date'], data_format)
+            worksheet.write(row, 1, weekday_map.get(record['day_of_week'], ''), data_format)
+            worksheet.write(row, 2, record['morning_high'], data_format)
+            worksheet.write(row, 3, record['morning_low'], data_format)
+            worksheet.write(row, 4, record['night_high'], data_format)
+            worksheet.write(row, 5, record['night_low'], data_format)
+            worksheet.write(row, 6, record['average'] if record['average'] else '-', data_format)
+            worksheet.write(row, 7, record['risk'] if record['risk'] else '-', data_format)
+            worksheet.write(row, 8, record['notes'] if record['notes'] else '', data_format)
+        
+        workbook.close()
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'血压记录_毛_{start_date}至{end_date}.xlsx'
+        )
+        
+    except Exception as e:
+        print(f"下载血压记录表格时出错: {str(e)}")
+        flash('下载表格时出错', 'error')
+        return redirect(url_for('blood_pressure2_detail'))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
