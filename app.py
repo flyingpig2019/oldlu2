@@ -1966,41 +1966,43 @@ def calculate_income_range():
             return jsonify({'error': '缺少日期参数', 'total': 0})
         
         db = get_db()
-        # 修改查询以根据签到签出状态计算收入
+        # 修改查询逻辑，直接计算每天的收入
         result = db.execute('''
-            WITH daily_records AS (
-                SELECT 
-                    date,
-                    MAX(checkin) as has_checkin,
-                    MAX(checkout) as has_checkout
-                FROM checkin_records 
-                WHERE date BETWEEN ? AND ?
-                GROUP BY date
-            )
-            SELECT SUM(
-                CASE 
-                    WHEN has_checkin = 1 AND has_checkout = 1 THEN 75 
-                    ELSE 0 
-                END
-            ) as total
-            FROM daily_records
+            SELECT 
+                COUNT(DISTINCT CASE WHEN checkin = 1 AND checkout = 1 THEN date END) as complete_days,
+                SUM(CASE WHEN checkin = 1 AND checkout = 1 THEN 75 ELSE 0 END) as total_income,
+                GROUP_CONCAT(DISTINCT date) as dates
+            FROM checkin_records 
+            WHERE date BETWEEN ? AND ?
         ''', [start_date, end_date]).fetchone()
         
-        total = result['total'] if result['total'] is not None else 0
+        print(f"查询结果: {dict(result)}")
+        print(f"涉及日期: {result['dates']}")
+        
+        total_income = float(result['total_income']) if result['total_income'] else 0
+        complete_days = result['complete_days'] if result['complete_days'] else 0
+        
+        print(f"处理后的结果 - 总收入: {total_income}, " +
+              f"完整签到天数: {complete_days}")
+        
         db.close()
         
-        return jsonify({
-            'success': True,
-            'total': total,
+        response_data = {
+            'income': total_income,
+            'days': complete_days,
             'start_date': start_date,
             'end_date': end_date
-        })
+        }
+        print(f"返回数据: {response_data}")
+        
+        return jsonify(response_data)
+        
     except Exception as e:
-        print(f"计算收入范围时出错: {str(e)}")
-        return jsonify({
-            'error': str(e),
-            'total': 0
-        }), 500
+        print(f"发生错误: {str(e)}")
+        print(f"错误类型: {type(e)}")
+        import traceback
+        print(f"错误堆栈: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/download_blood_pressure_table')
 @login_required
@@ -2657,6 +2659,69 @@ def download_blood_pressure2_table():
         print(f"下载血压记录表格时出错: {str(e)}")
         flash('下载表格时出错', 'error')
         return redirect(url_for('blood_pressure2_detail'))
+
+@app.route('/api/checkin/range_income')
+def get_range_income():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    print(f"收到请求 - 开始日期: {start_date}, 结束日期: {end_date}")
+    
+    if not start_date or not end_date:
+        return jsonify({'error': '请提供开始和结束日期'}), 400
+    
+    try:
+        db = get_db()
+        # 先检查是否有符合条件的记录
+        check_sql = '''
+            SELECT COUNT(*) as count, 
+                   SUM(CASE WHEN checkin = 1 AND checkout = 1 THEN 1 ELSE 0 END) as complete_count,
+                   SUM(CASE WHEN checkin = 1 OR checkout = 1 THEN 1 ELSE 0 END) as partial_count
+            FROM checkin_records 
+            WHERE date BETWEEN ? AND ?
+        '''
+        check_result = db.execute(check_sql, [start_date, end_date]).fetchone()
+        print(f"记录统计: 总记录数: {check_result['count']}, " +
+              f"完整记录: {check_result['complete_count']}, " +
+              f"部分记录: {check_result['partial_count']}")
+        
+        # 修改查询逻辑，直接计算每天的收入
+        result = db.execute('''
+            SELECT 
+                COUNT(DISTINCT CASE WHEN checkin = 1 AND checkout = 1 THEN date END) as complete_days,
+                SUM(CASE WHEN checkin = 1 AND checkout = 1 THEN 75 ELSE 0 END) as total_income,
+                GROUP_CONCAT(DISTINCT date) as dates
+            FROM checkin_records 
+            WHERE date BETWEEN ? AND ?
+        ''', [start_date, end_date]).fetchone()
+        
+        print(f"查询结果: {dict(result)}")
+        print(f"涉及日期: {result['dates']}")
+        
+        total_income = float(result['total_income']) if result['total_income'] else 0
+        complete_days = result['complete_days'] if result['complete_days'] else 0
+        
+        print(f"处理后的结果 - 总收入: {total_income}, " +
+              f"完整签到天数: {complete_days}")
+        
+        db.close()
+        
+        response_data = {
+            'income': total_income,
+            'days': complete_days,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        print(f"返回数据: {response_data}")
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"发生错误: {str(e)}")
+        print(f"错误类型: {type(e)}")
+        import traceback
+        print(f"错误堆栈: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

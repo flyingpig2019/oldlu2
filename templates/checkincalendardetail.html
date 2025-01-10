@@ -3,6 +3,207 @@
 {% block title %}签到日历 - 健康监测系统{% endblock %}
 
 {% block content %}
+<style>
+.stats-cards {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1rem;
+}
+
+.mini-card {
+    width: 280px;
+    height: 280px;
+    background: var(--background-secondary, #f8f9fa);
+    border-radius: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.mini-card-header {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border-color, #e9ecef);
+}
+
+.mini-card-header .material-icons {
+    font-size: 2.5rem;
+    color: var(--text-secondary, #6c757d);
+}
+
+.mini-card-header h6 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--text-secondary, #6c757d);
+}
+
+.mini-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.month-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: none;
+    color: var(--text-secondary, #6c757d);
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.nav-btn:hover {
+    background: var(--background-hover, #e9ecef);
+    color: var(--primary-color, #0d6efd);
+}
+
+.current-month {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--text-primary, #212529);
+}
+
+.stat {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 2.5rem;
+    font-weight: 600;
+    color: var(--primary-color, #0d6efd);
+    margin-bottom: 0.25rem;
+}
+
+.stat-desc {
+    display: block;
+    font-size: 1rem;
+    color: var(--text-secondary, #6c757d);
+}
+
+.date-inputs {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.date-inputs input {
+    width: 100%;
+    padding: 0.5rem;
+    font-size: 1rem;
+    border: 1px solid var(--border-color, #e9ecef);
+    border-radius: 0.25rem;
+}
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: none;
+    color: var(--text-secondary, #6c757d);
+    cursor: pointer;
+}
+
+.icon-btn:hover {
+    color: var(--primary-color, #0d6efd);
+}
+
+@media (max-width: 768px) {
+    .stats-cards {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .mini-card {
+        width: calc(50% - 1rem);
+        height: 200px;
+    }
+
+    .mini-card-header {
+        padding: 1rem;
+    }
+
+    .mini-card-body {
+        padding: 1rem;
+    }
+
+    .mini-card-header .material-icons {
+        font-size: 2rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+    }
+}
+
+.date-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    width: 100%;
+}
+
+.date-input {
+    width: 100%;
+    padding: 0.5rem;
+    font-size: 1rem;
+    border: 1px solid var(--border-color, #e9ecef);
+    border-radius: 0.25rem;
+}
+
+.btn-group {
+    display: flex;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-top: 1rem;
+}
+
+.mini-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: none;
+    background: none;
+    color: var(--text-secondary, #6c757d);
+    cursor: pointer;
+    border-radius: 50%;
+    padding: 0;
+}
+
+.mini-btn:hover {
+    background: var(--background-hover, #e9ecef);
+    color: var(--primary-color, #0d6efd);
+}
+
+.mini-btn .material-icons {
+    font-size: 1.5rem;
+}
+</style>
+
 <div class="container-fluid">
     <!-- 页面标题和按钮组 -->
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
@@ -17,82 +218,74 @@
     </div>
 
     <!-- 月份导航和统计卡片 -->
-    <div class="row mb-4">
+    <div class="stats-cards">
         <!-- 月份导航卡片 -->
-        <div class="col-md-3">
-            <div class="card shadow h-100">
-                <div class="card-header py-3 bg-primary">
-                    <h6 class="m-0 font-weight-bold text-white">月份导航</h6>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <a href="{{ url_for('checkin_calendar_month', year=prev_month.year, month=prev_month.month) }}" 
-                           class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-chevron-left"></i>
-                        </a>
-                        <h5 class="mb-0 text-primary">{{ current_month.strftime('%Y年%m月') }}</h5>
-                        <a href="{{ url_for('checkin_calendar_month', year=next_month.year, month=next_month.month) }}" 
-                           class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-chevron-right"></i>
-                        </a>
-                    </div>
+        <div class="mini-card">
+            <div class="mini-card-header">
+                <span class="material-icons">calendar_month</span>
+                <h6>月份导航</h6>
+            </div>
+            <div class="mini-card-body">
+                <div class="month-nav">
+                    <a href="{{ url_for('checkin_calendar_month', year=prev_month.year, month=prev_month.month) }}" 
+                        class="nav-btn">
+                        <span class="material-icons">chevron_left</span>
+                    </a>
+                    <span class="current-month">{{ current_month.strftime('%Y年%m月') }}</span>
+                    <a href="{{ url_for('checkin_calendar_month', year=next_month.year, month=next_month.month) }}" 
+                        class="nav-btn">
+                        <span class="material-icons">chevron_right</span>
+                    </a>
                 </div>
             </div>
         </div>
 
         <!-- 月收入卡片 -->
-        <div class="col-md-3">
-            <div class="card shadow h-100">
-                <div class="card-header py-3 bg-success">
-                    <h6 class="m-0 font-weight-bold text-white">本月收入</h6>
-                </div>
-                <div class="card-body">
-                    <div class="text-center">
-                        <h4 class="mb-0 text-success">¥{{ monthly_income }}</h4>
-                    </div>
+        <div class="mini-card">
+            <div class="mini-card-header">
+                <span class="material-icons">payments</span>
+                <h6>本月收入</h6>
+            </div>
+            <div class="mini-card-body">
+                <div class="stat">
+                    <span class="stat-value">¥{{ monthly_income }}</span>
+                    <span class="stat-desc">本月收入</span>
                 </div>
             </div>
         </div>
 
         <!-- 时间段选择卡片 -->
-        <div class="col-md-3">
-            <div class="card shadow h-100">
-                <div class="card-header py-3 bg-info">
-                    <h6 class="m-0 font-weight-bold text-white">自定义时间段</h6>
-                </div>
-                <div class="card-body">
-                    <div id="dateRangeForm" class="mb-0">
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <label class="form-label small text-muted">开始日期</label>
-                                <input type="date" class="form-control form-control-sm" id="startDate" name="start_date">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small text-muted">结束日期</label>
-                                <input type="date" class="form-control form-control-sm" id="endDate" name="end_date">
-                            </div>
-                        </div>
-                        <div class="text-center mt-3">
-                            <button type="button" class="btn btn-info btn-sm" id="calculateBtn">
-                                <i class="fas fa-calculator me-1"></i>计算收入
-                            </button>
-                        </div>
+        <div class="mini-card">
+            <div class="mini-card-header">
+                <span class="material-icons">date_range</span>
+                <h6>自定义时间段</h6>
+            </div>
+            <div class="mini-card-body">
+                <form id="dateRangeForm" class="date-form">
+                    <input type="date" id="startDate" name="start_date" class="date-input">
+                    <input type="date" id="endDate" name="end_date" class="date-input">
+                    <div class="btn-group">
+                        <button type="submit" class="mini-btn" title="查询">
+                            <span class="material-icons">search</span>
+                        </button>
+                        <button type="button" class="mini-btn" id="calculateBtn" title="计算">
+                            <span class="material-icons">calculate</span>
+                        </button>
                     </div>
-                </div>
+                </form>
             </div>
         </div>
 
         <!-- 阶段收入卡片 -->
-        <div class="col-md-3">
-            <div class="card shadow h-100" id="resultCard">
-                <div class="card-header py-3 bg-warning">
-                    <h6 class="m-0 font-weight-bold text-white">阶段收入</h6>
-                </div>
-                <div class="card-body">
-                    <div class="text-center">
-                        <span id="dateRange" class="d-block text-muted small mb-2">选择日期范围</span>
-                        <h4 class="mb-0 text-warning" id="totalAmount">¥0</h4>
-                    </div>
+        <div class="mini-card" id="resultCard">
+            <div class="mini-card-header">
+                <span class="material-icons">analytics</span>
+                <h6>阶段收入</h6>
+            </div>
+            <div class="mini-card-body">
+                <div class="stat">
+                    <span class="stat-value" id="totalAmount">¥0</span>
+                    <span class="stat-desc" id="dateRange">选择日期范围</span>
                 </div>
             </div>
         </div>
@@ -163,26 +356,10 @@
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
 <script>
-$(document).ready(function() {
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
-    document.getElementById('startDate').value = firstDayOfMonth.toISOString().split('T')[0];
-    document.getElementById('endDate').value = lastDayOfMonth.toISOString().split('T')[0];
-
-    // 使用 jQuery 绑定点击事件
-    $('#calculateBtn').on('click', function() {
-        calculateTotal();
-    });
-});
-
-function calculateTotal() {
-    console.log('calculateTotal function called'); // 调试日志
+document.getElementById('dateRangeForm').addEventListener('submit', function(e) {
+    e.preventDefault();
     const startDate = document.getElementById('startDate').value;
     const endDate = document.getElementById('endDate').value;
     
@@ -191,34 +368,76 @@ function calculateTotal() {
         return;
     }
     
-    // 显示加载状态
-    document.getElementById('dateRange').textContent = '计算中...';
-    document.getElementById('totalAmount').textContent = '...';
-    
-    console.log('Fetching data for dates:', startDate, endDate); // 调试日志
-    
-    // 使用 jQuery 的 AJAX
-    $.ajax({
-        url: '/calculate_income_range',
-        method: 'GET',
-        data: {
-            start_date: startDate,
-            end_date: endDate
-        },
-        success: function(data) {
-            console.log('收到数据:', data);  // 调试日志
-            document.getElementById('dateRange').textContent = 
-                `${startDate} 至 ${endDate}`;
+    // 发送AJAX请求获取时间段收入
+    fetch(`/api/checkin/range_income?start_date=${startDate}&end_date=${endDate}`)
+        .then(response => {
+            console.log('收到响应:', response);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('收到数据:', data);  // 打印接收到的数据
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            // 更新阶段收入卡片
             document.getElementById('totalAmount').textContent = 
-                `¥${data.total || 0}`;
-        },
-        error: function(xhr, status, error) {
-            console.error('计算收入时出错:', error);
-            alert('计算收入时出错: ' + error);
-            document.getElementById('dateRange').textContent = '选择日期范围';
-            document.getElementById('totalAmount').textContent = '¥0';
-        }
-    });
-}
+                `¥${parseFloat(data.income).toFixed(2)}`;
+            document.getElementById('dateRange').textContent = 
+                `完整签到${data.days}天 (${startDate} 至 ${endDate})`;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            console.error('详细错误:', error.message);
+            console.error('错误堆栈:', error.stack);
+            alert('获取数据失败，请重试');
+        });
+});
+
+// 计算按钮的点击事件
+document.getElementById('calculateBtn').addEventListener('click', function() {
+    console.log('计算按钮被点击');
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    console.log(`开始日期: ${startDate}, 结束日期: ${endDate}`);
+    
+    if (!startDate || !endDate) {
+        alert('请选择开始和结束日期');
+        return;
+    }
+    
+    const apiUrl = `/api/checkin/range_income?start_date=${startDate}&end_date=${endDate}`;
+    console.log('发送请求到:', apiUrl);
+    
+    // 发送AJAX请求获取时间段收入
+    fetch(apiUrl)
+        .then(response => {
+            console.log('收到响应:', response);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('收到数据:', data);
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            // 更新阶段收入卡片
+            document.getElementById('totalAmount').textContent = 
+                `¥${parseFloat(data.income).toFixed(2)}`;
+            document.getElementById('dateRange').textContent = 
+                `完整签到${data.days}天 (${startDate} 至 ${endDate})`;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            console.error('详细错误:', error.message);
+            console.error('错误堆栈:', error.stack);
+            alert('获取数据失败，请重试');
+        });
+});
 </script>
+
 {% endblock %} 
