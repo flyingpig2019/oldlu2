@@ -4,10 +4,10 @@
 <div class="page-header">
     <h1>健康监测系统</h1>
     <div class="header-actions">
-        <a href="{{ url_for('download_database') }}" class="btn btn-primary" onclick="return confirm('这将覆盖本地数据库，确定要继续吗？')">
+        <button onclick="downloadDatabase()" class="btn btn-primary">
             <span class="material-icons">cloud_download</span>
             从GitHub下载数据库
-        </a>
+        </button>
     </div>
 </div>
 
@@ -141,4 +141,25 @@
     padding: 0 0.5rem;
 }
 </style>
+
+<script>
+function downloadDatabase() {
+    if (confirm('这将覆盖本地数据库，确定要继续吗？')) {
+        fetch("{{ url_for('download_database') }}", {
+            method: 'GET',
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('数据库下载成功！');
+            } else {
+                alert('下载失败，请重试');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('下载失败，请重试');
+        });
+    }
+}
+</script>
 {% endblock %} 
