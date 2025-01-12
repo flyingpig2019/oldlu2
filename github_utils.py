@@ -87,8 +87,8 @@ def download_from_github():
 
                 # 如果验证成功，替换原有数据库
                 if os.path.exists('monitor.db'):
-                    os.remove('monitor.db')
-                shutil.move(temp_path, 'monitor.db')
+                #    os.remove('monitor.db')
+                    shutil.move(temp_path, 'monitor.db')
 
                 print("=== 文件下载成功 ===\n")
                 return True, "文件下载成功"
@@ -98,6 +98,7 @@ def download_from_github():
                 return False, "下载的文件不是有效的数据库"
 
         except Exception as e:
+            print(e)
             if "404" in str(e):
                 return False, "GitHub上找不到文件"
             return False, f"下载文件失败: {str(e)}"

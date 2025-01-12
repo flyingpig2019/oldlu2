@@ -174,7 +174,7 @@ def download_database():
     else:
         flash(message, 'success')
     
-    return redirect(url_for('landing'))
+    return redirect(url_for('index'))
 
 def get_db():
     """获取数据库连接"""
@@ -183,7 +183,7 @@ def get_db():
     return db
 
 def init_db():
-    """初始化新的数据库"""
+    #初始化新的数据库
     try:
         conn = sqlite3.connect('monitor.db')
         c = conn.cursor()
@@ -304,7 +304,7 @@ def medicine_detail():
         except sqlite3.DatabaseError:
             # 如果数据库访问出错，初始化数据库
             db.close()
-            init_db()
+            #init_db()
             # 返回空记录
             return render_template('medicinedetail.html',
                                 records=[],
@@ -2352,71 +2352,80 @@ def blood_pressure_average():
 @login_required
 def blood_pressure_chart():
     owner_id = 1  # 血压监测
-    db = get_db()
-    
-    # 获取所有记录并合并
-    records = db.execute('''
-        WITH all_dates AS (
-            SELECT DISTINCT date 
-            FROM (
-                SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
-                UNION
-                SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+    try:
+        db = get_db()
+        
+        # 获取所有记录并合并
+        records = db.execute('''
+            WITH all_dates AS (
+                SELECT DISTINCT date 
+                FROM (
+                    SELECT date FROM morning_bloodpressure_records WHERE owner_id = ?
+                    UNION
+                    SELECT date FROM night_bloodpressure_records WHERE owner_id = ?
+                )
+                ORDER BY date ASC
             )
-            ORDER BY date ASC
-        )
-        SELECT 
-            d.date,
-            m.morning_high,
-            m.morning_low,
-            n.night_high,
-            n.night_low,
-            c.average
-        FROM all_dates d
-        LEFT JOIN morning_bloodpressure_records m 
-            ON d.date = m.date AND m.owner_id = ?
-        LEFT JOIN night_bloodpressure_records n 
-            ON d.date = n.date AND n.owner_id = ?
-        LEFT JOIN bloodpressure_calculation_records c 
-            ON d.date = c.date AND c.owner_id = ?
-    ''', [owner_id] * 5).fetchall()
-    
-    dates = []
-    morning_high = []
-    morning_low = []
-    night_high = []
-    night_low = []
-    averages = []
-    
-    for record in records:
-        try:
-            if any([record['morning_high'], record['morning_low'], 
-                   record['night_high'], record['night_low']]):
-                dates.append(record['date'])
-                morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
-                morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
-                night_high.append(float(record['night_high']) if record['night_high'] else None)
-                night_low.append(float(record['night_low']) if record['night_low'] else None)
-                
-                if record['average']:
-                    avg_parts = record['average'].split('/')
-                    averages.append({
-                        'high': float(avg_parts[0]),
-                        'low': float(avg_parts[1])
-                    })
-                else:
-                    averages.append(None)
-        except (ValueError, TypeError, IndexError) as e:
-            print(f"处理记录出错: {str(e)}")
-            continue
-    
-    return render_template('bloodpressurechart.html',
-                         dates=dates,
-                         morning_high=morning_high,
-                         morning_low=morning_low,
-                         night_high=night_high,
-                         night_low=night_low,
-                         averages=averages)
+            SELECT 
+                d.date,
+                m.morning_high,
+                m.morning_low,
+                n.night_high,
+                n.night_low,
+                c.average
+            FROM all_dates d
+            LEFT JOIN morning_bloodpressure_records m 
+                ON d.date = m.date AND m.owner_id = ?
+            LEFT JOIN night_bloodpressure_records n 
+                ON d.date = n.date AND n.owner_id = ?
+            LEFT JOIN bloodpressure_calculation_records c 
+                ON d.date = c.date AND c.owner_id = ?
+            ORDER BY m.date
+        ''', [owner_id] * 5).fetchall()
+        
+        # 准备图表数据
+        dates = []
+        morning_high = []
+        morning_low = []
+        night_high = []
+        night_low = []
+        averages = []
+        
+        for record in records:
+            try:
+                if any([record['morning_high'], record['morning_low'], 
+                       record['night_high'], record['night_low']]):
+                    dates.append(record['date'])
+                    morning_high.append(float(record['morning_high']) if record['morning_high'] else None)
+                    morning_low.append(float(record['morning_low']) if record['morning_low'] else None)
+                    night_high.append(float(record['night_high']) if record['night_high'] else None)
+                    night_low.append(float(record['night_low']) if record['night_low'] else None)
+                    
+                    if record['average']:
+                        avg_parts = record['average'].split('/')
+                        averages.append({
+                            'high': float(avg_parts[0]),
+                            'low': float(avg_parts[1])
+                        })
+                    else:
+                        averages.append(None)
+            except (ValueError, TypeError, IndexError) as e:
+                print(f"处理记录出错: {str(e)}")
+                continue
+        
+        db.close()
+        
+        return render_template('bloodpressurechart.html',
+                             dates=dates,
+                             morning_high=morning_high,
+                             morning_low=morning_low,
+                             night_high=night_high,
+                             night_low=night_low,
+                             averages=averages)
+                             
+    except Exception as e:
+        print(f"生成血压图表时出错: {str(e)}")
+        return redirect(url_for('blood_pressure_detail'))
 
 @app.route('/blood_pressure3_chart')
 @login_required

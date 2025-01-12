@@ -3,260 +3,77 @@
 {% block title %}血压趋势图{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">血压趋势图</h1>
-    <div class="page-actions">
-        <a href="{{ url_for('blood_pressure_detail') }}" class="btn btn-secondary">
-            <span class="material-icons">arrow_back</span>
-            返回详情
-        </a>
-    </div>
+<div class="content">
+    <div id="chart"></div>
 </div>
 
-<div class="stats-row">
-    <div class="card stat-card">
-        <div class="stat-header">
-            <span class="material-icons">date_range</span>
-            <h3>选择时间范围</h3>
-        </div>
-        <div class="stat-body">
-            <form id="dateRangeForm" class="date-range-form">
-                <div class="date-inputs">
-                    <input type="date" id="start_date" name="start_date" class="form-control" value="{{ start_date }}">
-                    <span class="separator">至</span>
-                    <input type="date" id="end_date" name="end_date" class="form-control" value="{{ end_date }}">
-                </div>
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <span class="material-icons">search</span>
-                </button>
-            </form>
-        </div>
-    </div>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+const dates = {{ dates|tojson }};
+const morningHigh = {{ morning_high|tojson }};
+const morningLow = {{ morning_low|tojson }};
+const nightHigh = {{ night_high|tojson }};
+const nightLow = {{ night_low|tojson }};
+const averages = {{ averages|tojson }};
 
-    <div class="card stat-card">
-        <div class="stat-header">
-            <span class="material-icons">analytics</span>
-            <h3>数据统计</h3>
-        </div>
-        <div class="stat-body">
-            <div class="stat-value">{{ total_records }}条</div>
-            <div class="stat-label">共{{ days }}天记录</div>
-        </div>
-    </div>
+const traces = [
+    {
+        name: '晨间收缩压',
+        x: dates,
+        y: morningHigh,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#1f77b4'}
+    },
+    {
+        name: '晨间舒张压',
+        x: dates,
+        y: morningLow,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#2ca02c'}
+    },
+    {
+        name: '晚间收缩压',
+        x: dates,
+        y: nightHigh,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#ff7f0e'}
+    },
+    {
+        name: '晚间舒张压',
+        x: dates,
+        y: nightLow,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: {color: '#d62728'}
+    }
+];
 
-    <div class="card stat-card">
-        <div class="stat-header">
-            <span class="material-icons">trending_up</span>
-            <h3>最高收缩压</h3>
-        </div>
-        <div class="stat-body">
-            <div class="stat-value">{{ max_high }}mmHg</div>
-            <div class="stat-label">{{ max_high_date }}</div>
-        </div>
-    </div>
+const layout = {
+    title: '血压趋势图',
+    xaxis: {
+        title: '日期',
+        tickangle: -45
+    },
+    yaxis: {
+        title: '血压值'
+    },
+    showlegend: true,
+    legend: {
+        x: 0,
+        y: 1.2
+    }
+};
 
-    <div class="card stat-card">
-        <div class="stat-header">
-            <span class="material-icons">trending_down</span>
-            <h3>最低舒张压</h3>
-        </div>
-        <div class="stat-body">
-            <div class="stat-value">{{ min_low }}mmHg</div>
-            <div class="stat-label">{{ min_low_date }}</div>
-        </div>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h2 class="card-title">血压变化趋势</h2>
-    </div>
-    <div class="card-body">
-        <canvas id="bloodPressureChart"></canvas>
-    </div>
-</div>
+Plotly.newPlot('chart', traces, layout);
+</script>
 
 <style>
-.stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.stat-card {
-    padding: 1rem;
-    text-align: center;
-}
-
-.stat-header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-    color: var(--text-secondary);
-}
-
-.stat-header .material-icons {
-    font-size: 1.25rem;
-}
-
-.stat-header h3 {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-
-.stat-body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.stat-value {
-    font-size: 1.5rem;
-    font-weight: 600;
-    line-height: 1;
-    color: var(--primary-color);
-}
-
-.stat-label {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
-
-.date-range-form {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.date-inputs {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
-.date-inputs input {
-    width: 120px;
-    font-size: 0.875rem;
-    padding: 0.25rem;
-}
-
-.separator {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-}
-
-.btn-sm {
-    padding: 0.25rem;
-    min-width: 28px;
-    height: 28px;
-}
-
-.btn-sm .material-icons {
-    font-size: 1rem;
-}
-
-#bloodPressureChart {
+#chart {
     width: 100%;
-    height: 400px;
-}
-
-@media (max-width: 768px) {
-    .stats-row {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    }
-
-    .stat-card {
-        padding: 0.75rem;
-    }
-
-    .date-inputs input {
-        width: 100px;
-    }
-
-    #bloodPressureChart {
-        height: 300px;
-    }
+    height: 600px;
 }
 </style>
-
-<script>
-document.getElementById('dateRangeForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const startDate = document.getElementById('start_date').value;
-    const endDate = document.getElementById('end_date').value;
-    
-    if (startDate && endDate) {
-        window.location.href = `{{ url_for('blood_pressure_chart') }}?start_date=${startDate}&end_date=${endDate}`;
-    }
-});
-
-const ctx = document.getElementById('bloodPressureChart').getContext('2d');
-new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: {{ dates|tojson }},
-        datasets: [
-            {
-                label: '晨间收缩压',
-                data: {{ morning_high_data|tojson }},
-                borderColor: '#4CAF50',
-                backgroundColor: 'rgba(76, 175, 80, 0.1)',
-                tension: 0.4
-            },
-            {
-                label: '晨间舒张压',
-                data: {{ morning_low_data|tojson }},
-                borderColor: '#2196F3',
-                backgroundColor: 'rgba(33, 150, 243, 0.1)',
-                tension: 0.4
-            },
-            {
-                label: '晚间收缩压',
-                data: {{ night_high_data|tojson }},
-                borderColor: '#FF9800',
-                backgroundColor: 'rgba(255, 152, 0, 0.1)',
-                tension: 0.4
-            },
-            {
-                label: '晚间舒张压',
-                data: {{ night_low_data|tojson }},
-                borderColor: '#9C27B0',
-                backgroundColor: 'rgba(156, 39, 176, 0.1)',
-                tension: 0.4
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-            mode: 'index',
-            intersect: false
-        },
-        plugins: {
-            legend: {
-                position: 'top'
-            },
-            tooltip: {
-                mode: 'index',
-                intersect: false
-            }
-        },
-        scales: {
-            y: {
-                min: 40,
-                max: 200,
-                ticks: {
-                    stepSize: 20
-                }
-            }
-        }
-    }
-});
-</script>
 {% endblock %} 
